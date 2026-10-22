@@ -17,7 +17,6 @@ DataExchanger::DataExchanger(const std::string ip, const uint16_t port, const st
     : ip(ip), port(port), ssid(ssid), password(password)
 {
     wifi_event_group = xEventGroupCreateStatic(&wifi_event_group_buffer);
-    connectToWifi();
 }
 
 DataExchanger::~DataExchanger() = default;
@@ -196,9 +195,9 @@ void DataExchanger::appendToSending(std::function<int()> method, uint8_t *buffer
     sendingVector.push_back({method, bufferPointer});
 }
 
-void DataExchanger::appendToReceiving(std::function<void()> method, uint8_t *bufferPointer, std::size_t bufferSize)
+void DataExchanger::appendToReceiving(std::function<void()> method, uint8_t *bufferPointer, std::size_t bufferSize, uint8_t header)
 {
-    receivingVector.push_back({method, bufferPointer, bufferSize, 0});
+    receivingVector.push_back({method, bufferPointer, bufferSize, 0, header});
 }
 
 void DataExchanger::sendData(std::function<int()> method, uint8_t *bufferPointer)
@@ -234,27 +233,39 @@ bool DataExchanger::receiveData()
 {
     for (auto &entry : receivingVector)
     {
-        const std::size_t remainingBytes = entry.bufferSize - entry.bytesReceived;
-        const int received = recv(sock, entry.bufferPointer + entry.bytesReceived, remainingBytes, MSG_DONTWAIT);
-
-        if (received > 0)
+        // Reads until no data is left, header is read alone so bytes before it can be skipped
+        while (true)
         {
+            const std::size_t wantedBytes = entry.bytesReceived == 0 ? 1 : entry.bufferSize - entry.bytesReceived;
+            const int received = recv(sock, entry.bufferPointer + entry.bytesReceived, wantedBytes, MSG_DONTWAIT);
+
+            if (received == 0)
+            {
+                ESP_LOGW(TAG, "Socket closed by peer");
+                return false;
+            }
+            if (received < 0)
+            {
+                if (errno != EAGAIN && errno != EWOULDBLOCK)
+                {
+                    ESP_LOGW(TAG, "Receive failed: errno %d", errno);
+                    return false;
+                }
+                break;
+            }
+
+            // Not a header, so packet start was lost, byte is skipped
+            if (entry.bytesReceived == 0 && entry.bufferPointer[0] != entry.header)
+            {
+                continue;
+            }
+
             entry.bytesReceived += static_cast<std::size_t>(received);
             if (entry.bytesReceived == entry.bufferSize)
             {
                 entry.method();
                 entry.bytesReceived = 0;
             }
-        }
-        else if (received == 0)
-        {
-            ESP_LOGW(TAG, "Socket closed by peer");
-            return false;
-        }
-        else if (errno != EAGAIN && errno != EWOULDBLOCK)
-        {
-            ESP_LOGW(TAG, "Receive failed: errno %d", errno);
-            return false;
         }
     }
 

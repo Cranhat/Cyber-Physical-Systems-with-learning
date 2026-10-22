@@ -23,33 +23,28 @@ void Robot::stop() {
 
 };
 
-void Robot::moveMotorsForEncoderTicksCount(int64_t ticks, PowerMode powerMode, float imuAccel, float imuGyroZ)
+void Robot::moveForDistance(float distanceInMeters, PowerMode powerMode)
 {
-    motorManager.moveMotorsForEncoderTicksCount(ticks, powerMode, imuAccel, imuGyroZ);
+    motorManager.moveForDistance(distanceInMeters, powerMode);
 }
 
-void Robot::rotateMotorsForEncoderTicksCount(int64_t ticks, PowerMode powerMode, float imuGyroZ)
+void Robot::rotateForAngle(float angleInDegrees, PowerMode powerMode)
 {
-    motorManager.rotateMotorsForEncoderTicksCount(ticks, powerMode, imuGyroZ);
-}
-
-void Robot::moveWithVelocity(float velocityInMpS, float imuAccel, float imuGyroZ)
-{
-    motorManager.moveWithVelocity(velocityInMpS, imuAccel, imuGyroZ);
-}
-
-void Robot::moveForDistance(float distanceInMeters, float velocityInMpS, float imuAccel, float imuGyroZ)
-{
-    motorManager.moveForDistance(distanceInMeters, velocityInMpS, imuAccel, imuGyroZ);
-}
-
-void Robot::rotateForAngle(float angleInDegrees, float speedMps, float imuGyroZ)
-{
-    motorManager.rotateForAngle(angleInDegrees, speedMps, imuGyroZ);
+    motorManager.rotateForAngle(angleInDegrees, powerMode);
 }
 
 void Robot::stopMotors()
 {
     motorManager.stop();
+}
+
+void Robot::setState(State newState)
+{
+    state.store(newState);
+}
+
+State Robot::getState() const
+{
+    return state.load();
 }
 

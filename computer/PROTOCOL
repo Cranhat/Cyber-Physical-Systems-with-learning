@@ -1,4 +1,13 @@
-Binary sensor packet protocol:
+Robot <-> computer protocol
+
+One TCP connection, robot is the client. All multi-byte values are little-endian,
+float is IEEE-754 32-bit.
+
+
+
+ROBOT -> COMPUTER
+
+Binary packet protocol:
 
 [TYPE][PAYLOAD]
 
@@ -6,44 +15,106 @@ TYPE     uint8_t
 
 where:
   TYPE     - packet type identifier
-  PAYLOAD  - raw sensor data interpreted according to TYPE
+  PAYLOAD  - data interpreted according to TYPE
 
 Current TYPEs:
-  TYPE           CODE
+  TYPE           CODE    TOTAL PACKET SIZE (including TYPE)
 
-  LIDAR          0x54
-  ACCEL          0x67
-  ENCODER        0x68
+  RESPONSE       0x52    13 bytes
+  STATE          0x53     5 bytes
+  LIDAR          0x54    47 bytes
+  VELOCITY       0x56    13 bytes
+  ANGLE          0x41    13 bytes
+
+Robot sends in a loop (about 20 Hz): responses, state, lidar, velocity, angle.
+Packets follow each other with no separator.
 
 
+
+RESPONSE binary packet protocol (after every finished or rejected request):
+
+- Id:     4 bytes, uint32, id of the request
+- Status: 4 bytes, uint32, 0 - succeeded, 1 - failed
+- Time:   4 bytes, uint32, duration of the action in ms
+
+TOTAL PAYLOAD SIZE: 12 bytes
+TOTAL PACKET SIZE:  13 bytes including TYPE
+
+STATE binary packet protocol (on every state change and every 10 s):
+
+- State: 4 bytes, uint32, 0 - Idle, 1 - Calibrating, 2 - Ready, 3 - Processing, 4 - Failure
+
+TOTAL PAYLOAD SIZE: 4 bytes
+TOTAL PACKET SIZE:  5 bytes including TYPE
+
+Response of a finished request is always sent before the state change it causes.
 
 LIDAR binary packet protocol:
+
+Raw bytes from LiDAR UART are forwarded without parsing, so one send can
+contain several frames or end in the middle of a frame.
 
 - Data Length: 1 byte (upper 3 bits reserved, lower 5 bits = number of points, fixed 12)
 - Radar speed: 2 bytes (deg/s)
 - Start angle: 2 bytes (0.01 degree)
-- DataPoints: 3 bytes each point (distanceValue: 2 bytes, confidence: 1 byte)
+- DataPoints: 3 bytes each point (distanceValue: 2 bytes mm, confidence: 1 byte)
 - End angle: 2 bytes (0.01 degree)
 - Timestamp: 2 bytes (ms, wraps at 30000)
 - CRC8: 1 byte checksum
 
-ACCEL binary packet protocol:
+TOTAL PAYLOAD SIZE: 46 bytes
+TOTAL PACKET SIZE:  47 bytes including TYPE
 
-- Gyroscope X:   2 bytes
-- Gyroscope Y:   2 bytes
-- Gyroscope Z:   2 bytes
-- Acceleration X: 2 bytes
-- Acceleration Y: 2 bytes
-- Acceleration Z: 2 bytes
-- Timestamp delta: 8 bytes, little-endian uint64 nanoseconds
+VELOCITY binary packet protocol:
 
-TOTAL PAYLOAD SIZE: 20 bytes
-TOTAL PACKET SIZE:  21 bytes including TYPE
+- Velocity:  4 bytes, float, along direction of travel (m/s, negative - backward),
+             Kalman filter of accelerometer and encoders
+- Timestamp: 8 bytes, int64, time of the estimate (us since robot boot)
 
-ENCODER binary packet protocol:
+TOTAL PAYLOAD SIZE: 12 bytes
+TOTAL PACKET SIZE:  13 bytes including TYPE
 
-- Encoder number: 1 byte
-- Meters:         4 bytes, little-endian IEEE-754 float
-- Timestamp delta: 8 bytes, little-endian uint64 nanoseconds
+ANGLE binary packet protocol:
 
-TOTAL PAYLOAD SIZE: 13 bytes
+- Heading:   4 bytes, float, since robot boot (rad, clockwise positive, not wrapped to +-pi),
+             Kalman filter of gyroscope and encoders
+- Timestamp: 8 bytes, int64, time of the estimate (us since robot boot)
+
+TOTAL PAYLOAD SIZE: 12 bytes
+TOTAL PACKET SIZE:  13 bytes including TYPE
+
+VELOCITY and ANGLE are sampled from a 50 Hz estimator, the same timestamp
+in both packets means the same estimate.
+
+
+
+COMPUTER -> ROBOT
+
+Binary packet protocol, same as robot -> computer:
+
+[TYPE][PAYLOAD]
+
+Current TYPEs:
+  TYPE           CODE    TOTAL PACKET SIZE (including TYPE)
+
+  REQUEST        0x51    18 bytes
+
+Robot skips bytes until it finds TYPE, so after a lost or extra byte
+following requests are read correctly again.
+
+REQUEST binary packet protocol:
+
+- Type:           4 bytes, uint32, 0 - move, 1 - rotate,
+                  2 - stop (reserved, not implemented yet, answered as failed)
+- Distance:       4 bytes, float, distance for move (m, negative - backward)
+- Rotation angle: 4 bytes, float, angle for rotate (degrees, clockwise positive)
+- Id:             4 bytes, uint32, returned in RESPONSE
+- Power mode:     1 byte, uint8, max PWM duty x/255, at least 100
+                  (100 - ultraSlow, 150 - slow, 180 - normal, 200 - mediumFast, 220 - fast, 255 - overdrive)
+
+TOTAL PAYLOAD SIZE: 17 bytes
+TOTAL PACKET SIZE:  18 bytes including TYPE
+
+Requests are queued (up to 8) and executed one at a time.
+Request is answered as failed at once when the queue is full or robot is in Failure,
+and after it is taken from the queue when its type is unknown or its power mode is lower than 100.

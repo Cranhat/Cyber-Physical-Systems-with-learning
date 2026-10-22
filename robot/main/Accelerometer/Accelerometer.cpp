@@ -1,8 +1,7 @@
 #include "Accelerometer.hpp"
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-
-#include <algorithm>
 #include <cstdint>
 #include <stdio.h>
 
@@ -14,27 +13,25 @@ namespace
     constexpr int gyroscopeAxisCount = 3;
     constexpr int gyroscopeCalibrationSamples = 300;
     constexpr TickType_t gyroscopeCalibrationDelayTicks = pdMS_TO_TICKS(5);
+    constexpr int gyroscopeZIndex = 4;
+    constexpr float gyroscopeLsbPerDps = 65.6f; // range +-500 deg/s
+    constexpr float degToRad = 3.14159265f / 180.0f;
+
+    // Accelerometer axis pointing to robot front: 0 - x, 1 - y.
+    // Set sign to -1 if pushing robot forward gives negative acceleration.
+    constexpr int accelerationForwardAxis = 0;
+    constexpr float accelerationForwardSign = 1.0f;
+    constexpr int accelerationForwardIndex = 6 + accelerationForwardAxis * 2;
+    constexpr float accelerationLsbPerMps2 = 16384.0f / 9.81f; // default range +-2 g
 
     int16_t readInt16(const uint8_t *buffer, int index)
     {
         return static_cast<int16_t>((static_cast<uint16_t>(buffer[index + 1]) << 8) | buffer[index]);
     }
-
-    void writeInt16(uint8_t *buffer, int index, int16_t value)
-    {
-        buffer[index] = value & 0xFF;
-        buffer[index + 1] = (value >> 8) & 0xFF;
-    }
-
-    int16_t clampToInt16(int32_t value)
-    {
-        return static_cast<int16_t>(std::clamp<int32_t>(value, INT16_MIN, INT16_MAX));
-    }
 }
 
 Accelerometer::Accelerometer(I2c &i2c) : i2c(i2c)
 {
-    data[0] = 0x67;
     initializeI2c();
 }
 
@@ -61,8 +58,13 @@ void Accelerometer::calibrate()
         vTaskDelay(pdMS_TO_TICKS(200));
     }
 
-    uint8_t gyroscopeRange[2] = {0x43, 0x03};
+    uint8_t gyroscopeRange[2] = {0x43, 0x02}; // +-500 deg/s
     i2c.transmit(slave, gyroscopeRange[0], gyroscopeRange, 2);
+
+    // Read back, wrong range would make every angle wrong by a constant factor
+    uint8_t gyroscopeRangeRead = 0xFF;
+    i2c.transmitReceive(slave, gyroscopeRange[0], &gyroscopeRangeRead, 1);
+    printf("Gyroscope range register: 0x%02X (expected 0x%02X)\n", gyroscopeRangeRead, gyroscopeRange[1]);
 
     calibrateGyroscopeOffset();
 }
@@ -70,62 +72,63 @@ void Accelerometer::calibrate()
 void Accelerometer::calibrateGyroscopeOffset()
 {
     std::array<int64_t, gyroscopeAxisCount> offsetSum{};
+    int64_t accelerationForwardSum = 0;
+    int validSamples = 0;
 
     for (int sample = 0; sample < gyroscopeCalibrationSamples; sample++)
     {
-        i2c.transmitReceive(slave, dataRegister, receiveBuffer, 12);
+        if (!i2c.transmitReceive(slave, dataRegister, receiveBuffer, 12))
+        {
+            vTaskDelay(gyroscopeCalibrationDelayTicks);
+            continue;
+        }
+        validSamples++;
 
         for (int axis = 0; axis < gyroscopeAxisCount; axis++)
         {
             offsetSum[axis] += readInt16(receiveBuffer, axis * 2);
         }
+        // Robot stands still, so forward acceleration is only sensor offset and tilt
+        accelerationForwardSum += readInt16(receiveBuffer, accelerationForwardIndex);
 
         vTaskDelay(gyroscopeCalibrationDelayTicks);
     }
 
+    if (validSamples == 0)
+    {
+        printf("Error: gyroscope calibration failed, no valid samples\n");
+        return;
+    }
     for (int axis = 0; axis < gyroscopeAxisCount; axis++)
     {
-        gyroscopeOffset[axis] = static_cast<int16_t>(offsetSum[axis] / gyroscopeCalibrationSamples);
+        gyroscopeOffset[axis] = static_cast<int16_t>(offsetSum[axis] / validSamples);
     }
+    accelerationForwardOffset = static_cast<int16_t>(accelerationForwardSum / validSamples);
+    printf("Gyroscope calibration: %d of %d samples valid\n", validSamples, gyroscopeCalibrationSamples);
 
     printf("Gyroscope offset: x=%d y=%d z=%d\n",
            gyroscopeOffset[0],
            gyroscopeOffset[1],
            gyroscopeOffset[2]);
+    printf("Acceleration forward offset: %d\n", accelerationForwardOffset);
 }
 
-int Accelerometer::receiveData()
+bool Accelerometer::readMotion(float &gyroZ, float &accelForward)
 {
-    auto currentTimestamp = std::chrono::steady_clock::now();
-    const std::chrono::duration elapsed{currentTimestamp - previousTimestamp};
-    previousTimestamp = currentTimestamp;
-
-    i2c.transmitReceive(slave, dataRegister, receiveBuffer, 12);
-    for (int i = 1; i < 13; i++)
+    uint8_t buffer[12];
+    if (!i2c.transmitReceive(slave, dataRegister, buffer, 12))
     {
-        data[i] = receiveBuffer[i - 1];
+        gyroZ = lastGyroZ;
+        accelForward = lastAccelForward;
+        return false;
     }
 
-    for (int axis = 0; axis < gyroscopeAxisCount; axis++)
-    {
-        const int rawGyroscope = readInt16(receiveBuffer, axis * 2);
-        const int16_t correctedGyroscope = clampToInt16(rawGyroscope - gyroscopeOffset[axis]);
-        writeInt16(data, 1 + axis * 2, correctedGyroscope);
-    }
+    const int correctedGyroscope = readInt16(buffer, gyroscopeZIndex) - gyroscopeOffset[2];
+    const int correctedAcceleration = readInt16(buffer, accelerationForwardIndex) - accelerationForwardOffset;
 
-    uint64_t nano = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
-
-    for (int i = 13; i < 13 + 8; i++)
-    {
-        data[i] = nano & 0xFF;
-        nano >>= 8;
-    }
-    return 21;
+    gyroZ = static_cast<float>(correctedGyroscope) / gyroscopeLsbPerDps * degToRad;
+    accelForward = accelerationForwardSign * static_cast<float>(correctedAcceleration) / accelerationLsbPerMps2;
+    lastGyroZ = gyroZ;
+    lastAccelForward = accelForward;
+    return true;
 }
-
-// Packet Accelerometer::receivePackedData()
-// {
-//     packedData[0] = 0x67;
-//     std::memcpy(packedData + 1, &data, sizeof(AccelerometerData));
-//     return Packet(packedData, 21);
-// }

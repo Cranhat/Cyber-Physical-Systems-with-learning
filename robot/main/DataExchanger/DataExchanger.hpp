@@ -47,7 +47,8 @@ public:
     int createSocketAndConnect();
     void startTcpClient();
     void appendToSending(std::function<int()> method, uint8_t *bufferPointer);
-    void appendToReceiving(std::function<void()> method, uint8_t *bufferPointer, std::size_t bufferSize);
+    // Packet starts with header, bytes before it are skipped
+    void appendToReceiving(std::function<void()> method, uint8_t *bufferPointer, std::size_t bufferSize, uint8_t header);
     void sendData(std::function<int()> method, uint8_t *bufferPointer);
     bool receiveData();
 
@@ -58,6 +59,7 @@ private:
         uint8_t *bufferPointer;
         std::size_t bufferSize;
         std::size_t bytesReceived;
+        uint8_t header;
     };
 
     std::vector<std::pair<std::function<int()>, uint8_t *>> sendingVector;
