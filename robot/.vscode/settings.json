@@ -1,0 +1,15 @@
+{
+    "idf.currentSetup": "/home/cranhat/.espressif/v6.1/esp-idf",
+    "idf.openOcdConfigs": [
+        "board/esp32s3-builtin.cfg"
+    ],
+    "idf.customExtraVars": {
+        "IDF_TARGET": "esp32s3"
+    },
+    "clangd.path": "/home/cranhat/.espressif/tools/esp-clangd/esp-21.1.3_20260408/esp-clangd/bin/clangd",
+    "clangd.arguments": [
+      "--background-index",
+      "--query-driver=**",
+      "--compile-commands-dir=/home/cranhat/Projects/cyber_physical_with_learning/robot/build"
+    ]
+}

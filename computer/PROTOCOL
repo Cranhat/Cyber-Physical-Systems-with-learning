@@ -1,0 +1,49 @@
+Binary sensor packet protocol:
+
+[TYPE][PAYLOAD]
+
+TYPE     uint8_t
+
+where:
+  TYPE     - packet type identifier
+  PAYLOAD  - raw sensor data interpreted according to TYPE
+
+Current TYPEs:
+  TYPE           CODE
+
+  LIDAR          0x54
+  ACCEL          0x67
+  ENCODER        0x68
+
+
+
+LIDAR binary packet protocol:
+
+- Data Length: 1 byte (upper 3 bits reserved, lower 5 bits = number of points, fixed 12)
+- Radar speed: 2 bytes (deg/s)
+- Start angle: 2 bytes (0.01 degree)
+- DataPoints: 3 bytes each point (distanceValue: 2 bytes, confidence: 1 byte)
+- End angle: 2 bytes (0.01 degree)
+- Timestamp: 2 bytes (ms, wraps at 30000)
+- CRC8: 1 byte checksum
+
+ACCEL binary packet protocol:
+
+- Gyroscope X:   2 bytes
+- Gyroscope Y:   2 bytes
+- Gyroscope Z:   2 bytes
+- Acceleration X: 2 bytes
+- Acceleration Y: 2 bytes
+- Acceleration Z: 2 bytes
+- Timestamp delta: 8 bytes, little-endian uint64 nanoseconds
+
+TOTAL PAYLOAD SIZE: 20 bytes
+TOTAL PACKET SIZE:  21 bytes including TYPE
+
+ENCODER binary packet protocol:
+
+- Encoder number: 1 byte
+- Meters:         4 bytes, little-endian IEEE-754 float
+- Timestamp delta: 8 bytes, little-endian uint64 nanoseconds
+
+TOTAL PAYLOAD SIZE: 13 bytes

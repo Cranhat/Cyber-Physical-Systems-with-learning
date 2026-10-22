@@ -1,0 +1,3 @@
+dependencies:
+  espressif/pid_ctrl: "^0.1.1"
+  espressif/esp-dsp: "^1.0.0"
