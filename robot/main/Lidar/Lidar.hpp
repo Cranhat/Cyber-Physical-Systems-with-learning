@@ -2,7 +2,6 @@
 
 #include "LidarFrame.hpp"
 #include "Uart/Uart.hpp"
-#include "DataExchanger/Packet.hpp"
 #include <cstdint>
 #include <chrono>
 

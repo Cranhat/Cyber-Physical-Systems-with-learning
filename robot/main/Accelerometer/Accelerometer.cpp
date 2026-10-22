@@ -14,6 +14,16 @@ namespace
     constexpr int gyroscopeAxisCount = 3;
     constexpr int gyroscopeCalibrationSamples = 300;
     constexpr TickType_t gyroscopeCalibrationDelayTicks = pdMS_TO_TICKS(5);
+    constexpr int gyroscopeZIndex = 4;
+    constexpr float gyroscopeLsbPerDps = 65.6f; // range +-500 deg/s
+    constexpr float degToRad = 3.14159265f / 180.0f;
+
+    // Accelerometer axis pointing to robot front: 0 - x, 1 - y.
+    // Set sign to -1 if pushing robot forward gives negative acceleration.
+    constexpr int accelerationForwardAxis = 0;
+    constexpr float accelerationForwardSign = 1.0f;
+    constexpr int accelerationForwardIndex = 6 + accelerationForwardAxis * 2;
+    constexpr float accelerationLsbPerMps2 = 16384.0f / 9.81f; // default range +-2 g
 
     int16_t readInt16(const uint8_t *buffer, int index)
     {
@@ -61,8 +71,13 @@ void Accelerometer::calibrate()
         vTaskDelay(pdMS_TO_TICKS(200));
     }
 
-    uint8_t gyroscopeRange[2] = {0x43, 0x03};
+    uint8_t gyroscopeRange[2] = {0x43, 0x02}; // +-500 deg/s
     i2c.transmit(slave, gyroscopeRange[0], gyroscopeRange, 2);
+
+    // Read back, wrong range would make every angle wrong by a constant factor
+    uint8_t gyroscopeRangeRead = 0xFF;
+    i2c.transmitReceive(slave, gyroscopeRange[0], &gyroscopeRangeRead, 1);
+    printf("Gyroscope range register: 0x%02X (expected 0x%02X)\n", gyroscopeRangeRead, gyroscopeRange[1]);
 
     calibrateGyroscopeOffset();
 }
@@ -70,28 +85,45 @@ void Accelerometer::calibrate()
 void Accelerometer::calibrateGyroscopeOffset()
 {
     std::array<int64_t, gyroscopeAxisCount> offsetSum{};
+    int64_t accelerationForwardSum = 0;
+    int validSamples = 0;
 
     for (int sample = 0; sample < gyroscopeCalibrationSamples; sample++)
     {
-        i2c.transmitReceive(slave, dataRegister, receiveBuffer, 12);
+        if (!i2c.transmitReceive(slave, dataRegister, receiveBuffer, 12))
+        {
+            vTaskDelay(gyroscopeCalibrationDelayTicks);
+            continue;
+        }
+        validSamples++;
 
         for (int axis = 0; axis < gyroscopeAxisCount; axis++)
         {
             offsetSum[axis] += readInt16(receiveBuffer, axis * 2);
         }
+        // Robot stands still, so forward acceleration is only sensor offset and tilt
+        accelerationForwardSum += readInt16(receiveBuffer, accelerationForwardIndex);
 
         vTaskDelay(gyroscopeCalibrationDelayTicks);
     }
 
+    if (validSamples == 0)
+    {
+        printf("Error: gyroscope calibration failed, no valid samples\n");
+        return;
+    }
     for (int axis = 0; axis < gyroscopeAxisCount; axis++)
     {
-        gyroscopeOffset[axis] = static_cast<int16_t>(offsetSum[axis] / gyroscopeCalibrationSamples);
+        gyroscopeOffset[axis] = static_cast<int16_t>(offsetSum[axis] / validSamples);
     }
+    accelerationForwardOffset = static_cast<int16_t>(accelerationForwardSum / validSamples);
+    printf("Gyroscope calibration: %d of %d samples valid\n", validSamples, gyroscopeCalibrationSamples);
 
     printf("Gyroscope offset: x=%d y=%d z=%d\n",
            gyroscopeOffset[0],
            gyroscopeOffset[1],
            gyroscopeOffset[2]);
+    printf("Acceleration forward offset: %d\n", accelerationForwardOffset);
 }
 
 int Accelerometer::receiveData()
@@ -123,9 +155,22 @@ int Accelerometer::receiveData()
     return 21;
 }
 
-// Packet Accelerometer::receivePackedData()
-// {
-//     packedData[0] = 0x67;
-//     std::memcpy(packedData + 1, &data, sizeof(AccelerometerData));
-//     return Packet(packedData, 21);
-// }
+bool Accelerometer::readMotion(float &gyroZ, float &accelForward)
+{
+    uint8_t buffer[12];
+    if (!i2c.transmitReceive(slave, dataRegister, buffer, 12))
+    {
+        gyroZ = lastGyroZ;
+        accelForward = lastAccelForward;
+        return false;
+    }
+
+    const int correctedGyroscope = readInt16(buffer, gyroscopeZIndex) - gyroscopeOffset[2];
+    const int correctedAcceleration = readInt16(buffer, accelerationForwardIndex) - accelerationForwardOffset;
+
+    gyroZ = static_cast<float>(correctedGyroscope) / gyroscopeLsbPerDps * degToRad;
+    accelForward = accelerationForwardSign * static_cast<float>(correctedAcceleration) / accelerationLsbPerMps2;
+    lastGyroZ = gyroZ;
+    lastAccelForward = accelForward;
+    return true;
+}

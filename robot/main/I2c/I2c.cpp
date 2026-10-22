@@ -18,7 +18,9 @@ void I2c::setUpMaster()
         .clk_source = I2C_CLK_SRC_DEFAULT,
         .glitch_ignore_cnt = 5,
         .intr_priority = 0,
-        .trans_queue_depth = 4,
+        // 0 = synchronous mode: transfers finish before functions return.
+        // Asynchronous mode (> 0) returned before data was read and used buffers after they went out of scope
+        .trans_queue_depth = 0,
         .flags = {
             .enable_internal_pullup = true,
             .allow_pd = false},
@@ -47,20 +49,24 @@ void I2c::setUpMaster()
     return sharedPtr;
 }
 
-void I2c::transmitReceive(std::shared_ptr<I2cSlave> slave, uint8_t reg, uint8_t *buffer, uint8_t writeSize)
+bool I2c::transmitReceive(std::shared_ptr<I2cSlave> slave, uint8_t reg, uint8_t *buffer, uint8_t writeSize)
 {
     esp_ret = i2c_master_transmit_receive(slave->device, &reg, 1, buffer, writeSize, DEFAULT_TIMEOUT);
     if (esp_ret != ESP_OK)
     {
-        printf("Error: Failed to read from the device\r\n");
+        printf("Error: Failed to read from the device: %s\r\n", esp_err_to_name(esp_ret));
+        return false;
     }
+    return true;
 }
 
-void I2c::transmit(std::shared_ptr<I2cSlave> slave, uint8_t reg, uint8_t *cmd, uint8_t writeSize)
+bool I2c::transmit(std::shared_ptr<I2cSlave> slave, uint8_t reg, uint8_t *cmd, uint8_t writeSize)
 {
     esp_ret = i2c_master_transmit(slave->device, cmd, writeSize, DEFAULT_TIMEOUT);
     if (esp_ret != ESP_OK)
     {
-        printf("Error: Failed to read from the device\r\n");
+        printf("Error: Failed to write to the device: %s\r\n", esp_err_to_name(esp_ret));
+        return false;
     }
+    return true;
 }

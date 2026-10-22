@@ -17,7 +17,6 @@ DataExchanger::DataExchanger(const std::string ip, const uint16_t port, const st
     : ip(ip), port(port), ssid(ssid), password(password)
 {
     wifi_event_group = xEventGroupCreateStatic(&wifi_event_group_buffer);
-    connectToWifi();
 }
 
 DataExchanger::~DataExchanger() = default;

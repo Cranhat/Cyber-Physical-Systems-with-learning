@@ -1,4 +1,3 @@
-
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_system.h"
@@ -16,40 +15,20 @@
 #include "DataExchanger/DataExchanger.hpp"
 #include <cmath>
 
+constexpr bool wifiEnabled = false;
+
+// Motors stay off, robot is moved by hand and sensor directions are printed
+constexpr bool sensorTest = false;
+
+// Wheels lifted: each motor runs forward, then reverse, and encoder ticks are printed
+constexpr bool motorTest = false;
+
+// Robot on the floor: rotates 30 deg clockwise, then 30 deg counter-clockwise, every sample is logged
+constexpr bool rotationTest = false;
+
 extern "C"
 {
     void app_main(void);
-}
-
-namespace
-{
-    constexpr float pi = 3.1415F;
-    constexpr float encoderPpr = 7.0F;
-    constexpr float motorGearRatio = 150.0F;
-    constexpr float quadratureEdges = 4.0F;
-    constexpr float wheelRadiusInM = 0.016F;
-    constexpr float wheelTrackInM = 0.163F * (90.0F / 101.0F);
-
-    int distanceToEncoderTicks(float distanceInM)
-    {
-        const float countsPerRevolution = encoderPpr * motorGearRatio * quadratureEdges;
-        const float wheelCircumferenceInM = 2.0F * pi * wheelRadiusInM;
-        return static_cast<int>(std::lround(distanceInM * countsPerRevolution / wheelCircumferenceInM));
-    }
-
-    [[maybe_unused]] int wheelRevolutionsToEncoderTicks(float wheelRevolutions)
-    {
-        const float countsPerRevolution = encoderPpr * motorGearRatio * quadratureEdges;
-        return static_cast<int>(std::lround(wheelRevolutions * countsPerRevolution));
-    }
-
-    int angleToEncoderTicks(float angleInDegrees)
-    {
-        const float angleInRadians = angleInDegrees * pi / 180.0F;
-        const float wheelDistanceInM = angleInRadians * wheelTrackInM / 2.0F;
-        return distanceToEncoderTicks(wheelDistanceInM);
-    }
-
 }
 
 void app_main()
@@ -62,19 +41,24 @@ void app_main()
 
     static Lidar lidar{GPIO_NUM_43, GPIO_NUM_44, 230400};
     static DataExchanger dataExchanger("10.52.46.13", 3000, "realme 9 Pro+", "c4i39885");
+    if (wifiEnabled)
+    {
+        dataExchanger.connectToWifi();
+    }
 
     static Pwm pwm{10000};
     static Leds leds{pwm}; // empty for now
 
     gpio_install_isr_service(0);
 
-    static Encoder encoderLeft(1, 7, GPIO_NUM_1, GPIO_NUM_2, 0.016, 50.0F / 53.0F); // motor 1 {10, 11}, encoders A - 1, B - 2
+    static Encoder encoderLeft(1, 7, GPIO_NUM_1, GPIO_NUM_2, 0.016, 50.0F / 50.0F); // motor 1 {10, 11}, encoders A - 1, B - 2
     static Motor motorLeft(GPIO_NUM_11, GPIO_NUM_10, encoderLeft, pwm);             // Motor 1
 
-    static Encoder encoderRight(2, 7, GPIO_NUM_4, GPIO_NUM_5, 0.016, 50.0F / 53.0F); // motor 2 {12, 13}, encoders A - 4, B - 5
+    // Right motor is mirrored, so channels are swapped to count positive when driving forward
+    static Encoder encoderRight(2, 7, GPIO_NUM_5, GPIO_NUM_4, 0.016, 50.0F / 50.0F); // motor 2 {12, 13}, encoders A - 5, B - 4
     static Motor motorRight(GPIO_NUM_12, GPIO_NUM_13, encoderRight, pwm);            // Motor 2
 
-    static MotorManager motorManager{};
+    static MotorManager motorManager{accelerometer};
     motorManager.addMotor(1, motorLeft);
     motorManager.addMotor(2, motorRight);
 
@@ -87,6 +71,90 @@ void app_main()
     dataExchanger.appendToSending(std::bind(&Encoder::receiveData, &encoderRight), encoderRight.data);
 
     vTaskDelay(5000 / portTICK_PERIOD_MS);
+
+    if (motorTest)
+    {
+        printf("\n---motor test---\n");
+        Motor *testMotors[] = {&motorLeft, &motorRight};
+        const char *names[] = {"left", "right"};
+        for (int i = 0; i < 2; i++)
+        {
+            for (bool forward : {true, false})
+            {
+                const int64_t start = testMotors[i]->getEncoderTicks();
+                testMotors[i]->setDuty(forward, 150);
+                vTaskDelay(pdMS_TO_TICKS(1000));
+                testMotors[i]->stop();
+                vTaskDelay(pdMS_TO_TICKS(500));
+                printf("%s %s: %lld ticks\n", names[i], forward ? "forward" : "reverse",
+                       static_cast<long long>(testMotors[i]->getEncoderTicks() - start));
+            }
+        }
+        printf("---motor test done---\n");
+        return;
+    }
+
+    if (sensorTest)
+    {
+        // Rotate robot clockwise by hand (seen from above): both headings must grow positive.
+        // Push robot forward by hand: both wheel distances and velocity must be positive.
+        printf("\n---sensor test---\n");
+        constexpr float dt = 0.020f;
+        constexpr float wheelTrack = 0.162f;
+        constexpr float radToDeg = 180.0f / 3.14159265f;
+        const int64_t leftStart = encoderLeft.getPulseCount();
+        const int64_t rightStart = encoderRight.getPulseCount();
+        float gyroHeading = 0.0f;
+        float velocity = 0.0f;
+        int sample = 0;
+        TickType_t lastWakeTime = xTaskGetTickCount();
+
+        while (true)
+        {
+            float gyroZ = 0.0f;
+            float accelForward = 0.0f;
+            accelerometer.readMotion(gyroZ, accelForward);
+            gyroHeading += -1.0f * gyroZ * dt; // same gyroDirection as MotorManager
+            velocity += accelForward * dt;
+
+            if (++sample % 10 == 0)
+            {
+                const float left = encoderLeft.getDistanceInMeters(encoderLeft.getPulseCount() - leftStart);
+                const float right = encoderRight.getDistanceInMeters(encoderRight.getPulseCount() - rightStart);
+                const float encoderHeading = (left - right) / wheelTrack;
+                printf("gyro heading %7.1f deg | encoder heading %7.1f deg | left %6.3f m | right %6.3f m | accel %6.2f m/s2 | accel velocity %6.2f m/s | right pins A=%d B=%d ticks=%lld\n",
+                       gyroHeading * radToDeg, encoderHeading * radToDeg, left, right, accelForward, velocity,
+                       gpio_get_level(GPIO_NUM_5), gpio_get_level(GPIO_NUM_4), static_cast<long long>(encoderRight.getPulseCount()));
+            }
+            vTaskDelayUntil(&lastWakeTime, pdMS_TO_TICKS(20));
+        }
+    }
+
+    if (rotationTest)
+    {
+        printf("\n---rotation test---\n");
+        motorManager.logRotation = true;
+        printf("--- 30 deg clockwise ---\n");
+        motorManager.rotateForAngle(30, normal);
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
+        printf("--- 30 deg counter-clockwise ---\n");
+        motorManager.rotateForAngle(-30, normal);
+        printf("---rotation test done---\n");
+        return;
+    }
+
+    if (!wifiEnabled)
+    {
+        motorManager.moveForDistance(0.5, normal);
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        motorManager.rotateForAngle(180, normal);
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        motorManager.moveForDistance(0.5, normal);
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        motorManager.rotateForAngle(180, normal);
+        printf("---driving test done---\n");
+        return;
+    }
 
     printf("\n---start tcp client---\n");
 
@@ -101,26 +169,6 @@ void app_main()
         &dataExchanger,
         5,
         nullptr);
-
-    while (true)
-    {
-        motorManager.moveMotorsForEncoderTicksCount(distanceToEncoderTicks(0.5), mediumFast);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        motorManager.rotateMotorsForEncoderTicksCount(angleToEncoderTicks(90), mediumFast);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        motorManager.moveMotorsForEncoderTicksCount(distanceToEncoderTicks(0.25), mediumFast);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        motorManager.rotateMotorsForEncoderTicksCount(angleToEncoderTicks(90), mediumFast);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        motorManager.moveMotorsForEncoderTicksCount(distanceToEncoderTicks(0.5), mediumFast);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        motorManager.rotateMotorsForEncoderTicksCount(angleToEncoderTicks(90), mediumFast);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        motorManager.moveMotorsForEncoderTicksCount(distanceToEncoderTicks(0.25), mediumFast);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        motorManager.rotateMotorsForEncoderTicksCount(angleToEncoderTicks(90), mediumFast);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-    }
 
     printf("---end --- \n");
 };

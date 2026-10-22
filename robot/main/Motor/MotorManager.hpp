@@ -4,13 +4,44 @@
 #include <cstdint>
 #include <map>
 #include "driver/gpio.h"
+#include "Accelerometer/Accelerometer.hpp"
+#include "Kalman/MotionEstimator.hpp"
 #include "Motor/Motor.hpp"
 #include "Motor/Encoder.hpp"
-#include "Motor/Controller.hpp"
 
+/*
+Drives robot with two motors: 1 – left, 2 – right.
+Robot only moves straight (forward/backward) or rotates in place.
+
+Straight moves use only encoders, every wheel has absolute target position
+in encoder ticks since boot. A straight move shifts targets of both wheels by
+the same number of ticks, each wheel drives toward its target and stops on
+its own when it reaches it. Targets are moved from previous targets, not from
+where wheels stopped, so overshoot of one move is taken back in the next one.
+While driving straight:
+  - duty ramps up at start and goes down close to target (not below minDriveDuty),
+  - sync PID on progress difference between wheels slows down the wheel that is ahead,
+    so robot drives straight and both wheels reach their targets together.
+
+Rotations use heading from MotionEstimator (Kalman filter): gyroscope is
+trusted for heading, signed encoder heading only slowly corrects its drift.
+  - gyroscope bias is calibrated while robot stands still before each rotation,
+  - heading PID sets rotation duty, derivative is gyroscope turn rate, integral works only
+    close to target; negative output turns back, so overshoot is corrected,
+  - duty limit ramps up at start, output smaller than minRotationDuty is raised to it,
+  - wheels turn in opposite directions, forward/backward drift of the robot is pushed back,
+  - rotation is finished when heading stays within tolerance and robot almost stopped turning.
+Target heading is kept across rotations, so error of one rotation is corrected
+in the next one. Heading is not tracked during straight moves.
+After rotation, wheel targets are set to where wheels stopped.
+
+Both encoders must count up when robot drives forward.
+*/
 class MotorManager
 {
 public:
+    MotorManager(Accelerometer &accelerometer);
+
     Motor operator[](const int motorNumber)
     {
         return motors.at(motorNumber);
@@ -18,34 +49,27 @@ public:
 
     void addMotor(const int motorNumber, Motor &motor);
 
-    // Move robot with given velocity (m/s) using EKF and PID closed loop with heading lock
-    void moveWithVelocity(float velocityInMpS, float imuAccel = 0.0f, float imuGyroZ = 0.0f);
-    void moveWithVelocity(float velocityInMpS, uint32_t durationMs, float imuAccel = 0.0f, float imuGyroZ = 0.0f);
-
-    // Move robot for a specified distance (meters) using EKF and PID closed loop with heading lock
-    void moveForDistance(float distanceInMeters, float velocityInMpS = 0.2f, float imuAccel = 0.0f, float imuGyroZ = 0.0f);
-    void moveForDistance(float distanceInMeters, PowerMode powerMode, float imuAccel = 0.0f, float imuGyroZ = 0.0f);
-
-    // Rotate robot for a specified angle (degrees) using EKF (gyro Z + encoders) and PID
-    void rotateForAngle(float angleInDegrees, float speedMps = 0.2f, float imuGyroZ = 0.0f);
-    void rotateForAngle(float angleInDegrees, PowerMode powerMode, float imuGyroZ = 0.0f);
-
-    // Tick-based movement functions
-    void moveMotorsForEncoderTicksCount(int64_t ticks, PowerMode powerMode, float imuAccel = 0.0f, float imuGyroZ = 0.0f);
-    void rotateMotorsForEncoderTicksCount(int64_t ticks, PowerMode powerMode, float imuGyroZ = 0.0f);
-
-    // Estimated robot pose from EKF
-    float getX() const;
-    float getY() const;
-    float getYaw() const;        // in radians
-    float getYawDegrees() const; // in degrees
+    void moveForDistance(float distanceInMeters, PowerMode powerMode);
+    void rotateForAngle(float angleInDegrees, PowerMode powerMode);
 
     void stop();
 
-private:
-    std::map<int, Motor> motors;
-    std::map<int, Controller> controllers;
-    bool isDrivingStraight{false};
-    float targetStraightHeading{0.0f};
-};
+    // Prints every control loop sample of rotations (CSV lines starting with "rotlog")
+    bool logRotation{false};
 
+private:
+    Accelerometer &accelerometer;
+    std::map<int, Motor> motors;
+    std::map<int, int64_t> targetTicks; // absolute wheel target positions (ticks since boot)
+    MotionEstimator motionEstimator;
+    float targetHeading{0.0f}; // heading robot should have, since boot (rad, clockwise positive)
+    int64_t lastHeadingUpdateUs{0}; // time of previous heading update (us)
+    float headingDt{0.0f};          // real time between last two heading updates (s)
+
+    int64_t distanceToTicks(int motorNumber, float distanceInMeters);
+    float wheelDistance(int motorNumber, int64_t startTicks); // signed meters since startTicks
+    void driveToTargets(PowerMode powerMode);
+    void calibrateGyroBias();
+    // Reads IMU and returns estimated heading (rad), turnRate is bias corrected (rad/s)
+    float updateHeading(float startHeading, int64_t leftStart, int64_t rightStart, float &turnRate);
+};

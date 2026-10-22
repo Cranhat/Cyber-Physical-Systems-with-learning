@@ -21,25 +21,34 @@ is raw data afaik.
 //     int16_t accelerationY;
 //     int16_t accelerationZ;
 // };
+
 class Accelerometer
 {
 public:
     Accelerometer(I2c &i2c);
     ~Accelerometer();
 
+    int receiveData();
+    // Returns false when read failed, then previous values are given
+    bool readMotion(float &gyroZ, float &accelForward);
+
     uint8_t data[21];
 
-    int receiveData();
-
 private:
-    I2c &i2c;
-    bool isMeasuring = false;
-    uint8_t receiveBuffer[12];
-    std::array<int16_t, 3> gyroscopeOffset{};
-    std::shared_ptr<I2cSlave> slave;
-    std::chrono::steady_clock::time_point previousTimestamp{
-        std::chrono::steady_clock::now()};
     void initializeI2c();
     void calibrate();
     void calibrateGyroscopeOffset();
+
+    I2c &i2c;
+    std::shared_ptr<I2cSlave> slave;
+
+    bool isMeasuring = false;
+    uint8_t receiveBuffer[12];
+    std::array<int16_t, 3> gyroscopeOffset{};
+    int16_t accelerationForwardOffset{0};
+    float lastGyroZ{0.0f};
+    float lastAccelForward{0.0f};
+    std::chrono::steady_clock::time_point previousTimestamp{
+        std::chrono::steady_clock::now()};
+
 };
