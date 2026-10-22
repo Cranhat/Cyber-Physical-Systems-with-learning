@@ -1,81 +1,136 @@
 #include "RobotAPI.hpp"
 
-#include <cmath>
+#include "freertos/task.h"
 #include <cstring>
 #include <functional>
 #include <stdio.h>
 
 namespace
 {
-    constexpr float pi = 3.1415F;
-    constexpr float encoderPpr = 7.0F;
-    constexpr float motorGearRatio = 150.0F;
-    constexpr float quadratureEdges = 4.0F;
-    constexpr float wheelRadiusInM = 0.016F;
-    constexpr float wheelTrackInM = 0.16F;
+    constexpr uint8_t responsePacketType = 0x52;
+    constexpr uint8_t statePacketType = 0x53;
+    constexpr auto stateSendInterval = std::chrono::seconds(10);
 
-    int distanceToEncoderTicks(float distanceInM)
-    {
-        const float countsPerRevolution = encoderPpr * motorGearRatio * quadratureEdges;
-        const float wheelCircumferenceInM = 2.0F * pi * wheelRadiusInM;
-        return static_cast<int>(0.9434F * std::lround(std::fabs(distanceInM) * countsPerRevolution / wheelCircumferenceInM));
-    }
-
-    int angleToEncoderTicks(float angleInDegrees)
-    {
-        const float angleInRadians = std::fabs(angleInDegrees) * pi / 180.0F;
-        const float wheelDistanceInM = angleInRadians * wheelTrackInM / 2.0F;
-        return distanceToEncoderTicks(wheelDistanceInM);
-    }
+    // Higher than DataExchanger task, so motor control loop keeps its timing
+    constexpr UBaseType_t requestTaskPriority = 6;
+    constexpr uint32_t requestTaskStackSize = 4096;
 }
 
 RobotAPI::RobotAPI(Robot &robot) : robot(robot), dataExchanger(robot.dataExchanger)
 {
+    requestQueue = xQueueCreate(maxQueuedRequests, sizeof(Request));
+    responseQueue = xQueueCreate(maxPendingResponses, sizeof(Response));
+
     dataExchanger.appendToReceiving(std::bind(&RobotAPI::onRequest, this), receiveBuffer, sizeof(receiveBuffer));
+    dataExchanger.appendToSending(std::bind(&RobotAPI::sendStatus, this), sendBuffer);
+
+    xTaskCreate(requestTask, "robot_requests", requestTaskStackSize, this, requestTaskPriority, nullptr);
 }
 
 RobotAPI::~RobotAPI() = default;
 
 void RobotAPI::onRequest()
 {
-    // make sure that only one request is being processed at the time
-
     std::memcpy(&request, receiveBuffer, sizeof(request));
 
-    switch (request.type)
+    if (robot.getState() == Failure)
+    {
+        printf("Robot in failure, request %lu rejected\n", static_cast<unsigned long>(request.id));
+        queueResponse(request.id, failed, 0);
+        return;
+    }
+
+    // Requests wait in queue and are executed one at a time
+    if (xQueueSend(requestQueue, &request, 0) != pdTRUE)
+    {
+        printf("Request queue full, request %lu rejected\n", static_cast<unsigned long>(request.id));
+        queueResponse(request.id, failed, 0);
+    }
+}
+
+void RobotAPI::requestTask(void *arg)
+{
+    static_cast<RobotAPI *>(arg)->processRequests();
+}
+
+void RobotAPI::processRequests()
+{
+    robot.setState(Ready);
+
+    while (true)
+    {
+        Request currentRequest{};
+        xQueueReceive(requestQueue, &currentRequest, portMAX_DELAY);
+        robot.setState(Processing);
+
+        const auto startTime = std::chrono::steady_clock::now();
+        const ResponseStatus status = executeRequest(currentRequest) ? succeded : failed;
+        const auto elapsed = std::chrono::steady_clock::now() - startTime;
+        const auto elapsedInMs = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+
+        // Response is queued before state changes, sendStatus relies on this order
+        queueResponse(currentRequest.id, status, static_cast<uint32_t>(elapsedInMs));
+        if (uxQueueMessagesWaiting(requestQueue) == 0)
+        {
+            robot.setState(Ready);
+        }
+    }
+}
+
+bool RobotAPI::executeRequest(const Request &currentRequest)
+{
+    switch (currentRequest.type)
     {
     case move:
-        moveRobot();
-        break;
+        robot.moveForDistance(currentRequest.distanceInM, slow);
+        return true;
     case rotate:
-        rotateRobot();
-        break;
+        robot.rotateForAngle(currentRequest.rotationAngle, slow);
+        return true;
     default:
-        printf("Unknown robot request type: %d\n", static_cast<int>(request.type));
-        break;
+        printf("Unknown robot request type: %d\n", static_cast<int>(currentRequest.type));
+        return false;
     }
 }
 
-void RobotAPI::moveRobot()
+void RobotAPI::queueResponse(uint32_t id, ResponseStatus status, uint32_t timeInMs)
 {
-    int ticks = distanceToEncoderTicks(request.distanceInM);
-
-    if (request.distanceInM < 0.0F)
+    const Response response{id, status, timeInMs};
+    if (xQueueSend(responseQueue, &response, 0) != pdTRUE)
     {
-        ticks = -ticks;
+        printf("Response queue full, response %lu dropped\n", static_cast<unsigned long>(id));
     }
-
-    robot.moveMotorsForEncoderTicksCount(ticks, slow);
 }
 
-void RobotAPI::rotateRobot()
+int RobotAPI::sendStatus()
 {
-    int ticks = angleToEncoderTicks(request.rotationAngle);
+    int length = 0;
 
-    if (request.rotationAngle < 0.0F)
+    // State is read before responses: response of a finished move is queued
+    // before state changes, so it is always sent before the state update
+    const State state = robot.getState();
+
+    Response response{};
+    while (length + responsePacketSize + statePacketSize <= static_cast<int>(sizeof(sendBuffer)) &&
+           xQueueReceive(responseQueue, &response, 0) == pdTRUE)
     {
-        ticks = -ticks;
+        sendBuffer[length] = responsePacketType;
+        std::memcpy(sendBuffer + length + 1, &response, sizeof(response));
+        length += responsePacketSize;
     }
 
-    robot.rotateMotorsForEncoderTicksCount(ticks, slow);
+    const auto now = std::chrono::steady_clock::now();
+    if (!stateSent || state != lastSentState || now - lastStateSendTime >= stateSendInterval)
+    {
+        const uint32_t stateValue = state;
+        sendBuffer[length] = statePacketType;
+        std::memcpy(sendBuffer + length + 1, &stateValue, sizeof(stateValue));
+        length += statePacketSize;
+
+        stateSent = true;
+        lastSentState = state;
+        lastStateSendTime = now;
+    }
+
+    return length;
 }

@@ -1,4 +1,3 @@
-
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_system.h"
@@ -19,37 +18,6 @@
 extern "C"
 {
     void app_main(void);
-}
-
-namespace
-{
-    constexpr float pi = 3.1415F;
-    constexpr float encoderPpr = 7.0F;
-    constexpr float motorGearRatio = 150.0F;
-    constexpr float quadratureEdges = 4.0F;
-    constexpr float wheelRadiusInM = 0.016F;
-    constexpr float wheelTrackInM = 0.163F * (90.0F / 101.0F);
-
-    int distanceToEncoderTicks(float distanceInM)
-    {
-        const float countsPerRevolution = encoderPpr * motorGearRatio * quadratureEdges;
-        const float wheelCircumferenceInM = 2.0F * pi * wheelRadiusInM;
-        return static_cast<int>(std::lround(distanceInM * countsPerRevolution / wheelCircumferenceInM));
-    }
-
-    [[maybe_unused]] int wheelRevolutionsToEncoderTicks(float wheelRevolutions)
-    {
-        const float countsPerRevolution = encoderPpr * motorGearRatio * quadratureEdges;
-        return static_cast<int>(std::lround(wheelRevolutions * countsPerRevolution));
-    }
-
-    int angleToEncoderTicks(float angleInDegrees)
-    {
-        const float angleInRadians = angleInDegrees * pi / 180.0F;
-        const float wheelDistanceInM = angleInRadians * wheelTrackInM / 2.0F;
-        return distanceToEncoderTicks(wheelDistanceInM);
-    }
-
 }
 
 void app_main()
@@ -74,7 +42,7 @@ void app_main()
     static Encoder encoderRight(2, 7, GPIO_NUM_4, GPIO_NUM_5, 0.016, 50.0F / 53.0F); // motor 2 {12, 13}, encoders A - 4, B - 5
     static Motor motorRight(GPIO_NUM_12, GPIO_NUM_13, encoderRight, pwm);            // Motor 2
 
-    static MotorManager motorManager{};
+    static MotorManager motorManager{accelerometer};
     motorManager.addMotor(1, motorLeft);
     motorManager.addMotor(2, motorRight);
 
@@ -102,25 +70,9 @@ void app_main()
         5,
         nullptr);
 
-    while (true)
-    {
-        motorManager.moveMotorsForEncoderTicksCount(distanceToEncoderTicks(0.5), mediumFast);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        motorManager.rotateMotorsForEncoderTicksCount(angleToEncoderTicks(90), mediumFast);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        motorManager.moveMotorsForEncoderTicksCount(distanceToEncoderTicks(0.25), mediumFast);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        motorManager.rotateMotorsForEncoderTicksCount(angleToEncoderTicks(90), mediumFast);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        motorManager.moveMotorsForEncoderTicksCount(distanceToEncoderTicks(0.5), mediumFast);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        motorManager.rotateMotorsForEncoderTicksCount(angleToEncoderTicks(90), mediumFast);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        motorManager.moveMotorsForEncoderTicksCount(distanceToEncoderTicks(0.25), mediumFast);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        motorManager.rotateMotorsForEncoderTicksCount(angleToEncoderTicks(90), mediumFast);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-    }
+    // while (true)
+    // {
+    // }
 
     printf("---end --- \n");
 };

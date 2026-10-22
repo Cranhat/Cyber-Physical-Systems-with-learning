@@ -1,0 +1,65 @@
+IMU CONFIGURATION (Accelerometer class)
+=======================================
+
+Chip
+----
+Code is written for Bosch BMI160.
+Schematic (U4) shows ST LSM6DS3 - this does NOT match the code:
+LSM6DS3 uses I2C address 0x6A/0x6B and has no register 0x7E.
+Verify physical chip: BMI160 register 0x00 (CHIP_ID) must read 0xD1.
+
+Source of register values: Bosch BMI160_SensorAPI, bmi160_defs.h
+(reset values and sensitivities from BMI160 datasheet).
+
+
+I2C
+---
+Address          0x69      (0x68 default, 0x69 when SDO pin is high)
+
+
+Initialization sequence (Accelerometer::calibrate)
+--------------------------------------------------
+Register  Value  Meaning                      Required delay  Used delay
+0x7E      0xB6   soft reset                   >= 1 ms         200 ms
+0x7E      0x11   accelerometer normal mode    >= 5 ms         200 ms
+0x7E      0x15   gyroscope normal mode        >= 80 ms        200 ms
+0x43      0x03   GYR_RANGE = +-250 deg/s      -               -
+
+Then gyroscope offset (x, y, z) and forward acceleration offset
+are averaged from 300 samples, 5 ms apart. Robot must stand still.
+
+
+Registers left at reset value
+-----------------------------
+Register  Reset  Meaning
+0x40      0x28   ACC_CONF: ODR 100 Hz, normal filter (~40 Hz bandwidth)
+0x41      0x03   ACC_RANGE: +-2 g
+0x42      0x28   GYR_CONF: ODR 100 Hz, normal filter (~40 Hz bandwidth)
+
+Control loop reads at 50 Hz. If velocity estimate is noisy from motor
+vibration, more averaging can be set, e.g. ACC_CONF = 0x2A.
+
+
+Data registers (one 12-byte read from 0x0C, int16 little-endian)
+-----------------------------------------------------------------
+Index  Register  Data
+0-1    0x0C      gyroscope X
+2-3    0x0E      gyroscope Y
+4-5    0x10      gyroscope Z       (gyroscopeZIndex = 4)
+6-7    0x12      accelerometer X   (accelerationForwardIndex = 6)
+8-9    0x14      accelerometer Y
+10-11  0x16      accelerometer Z
+
+
+Scale factors
+-------------
+Gyroscope      +-250 deg/s  ->  131.2 LSB per deg/s   (gyroscopeLsbPerDps)
+Accelerometer  +-2 g        ->  16384 LSB per g       (accelerationLsbPerMps2 = 16384 / 9.81)
+
+
+Mounting (must be checked on the robot)
+---------------------------------------
+accelerationForwardAxis  = 0 (x)  push robot forward by hand: velocity must be positive
+accelerationForwardSign  = 1      and match encoder velocity, otherwise change axis/sign
+gyroDirection            = 1      (MotorManager) rotate robot counter-clockwise by hand:
+                                  angle must be positive, otherwise set -1

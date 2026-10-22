@@ -14,6 +14,16 @@ namespace
     constexpr int gyroscopeAxisCount = 3;
     constexpr int gyroscopeCalibrationSamples = 300;
     constexpr TickType_t gyroscopeCalibrationDelayTicks = pdMS_TO_TICKS(5);
+    constexpr int gyroscopeZIndex = 4;
+    constexpr float gyroscopeLsbPerDps = 131.2f; // range +-250 deg/s
+    constexpr float degToRad = 3.14159265f / 180.0f;
+
+    // Accelerometer axis pointing to robot front: 0 - x, 1 - y.
+    // Set sign to -1 if pushing robot forward gives negative acceleration.
+    constexpr int accelerationForwardAxis = 0;
+    constexpr float accelerationForwardSign = 1.0f;
+    constexpr int accelerationForwardIndex = 6 + accelerationForwardAxis * 2;
+    constexpr float accelerationLsbPerMps2 = 16384.0f / 9.81f; // default range +-2 g
 
     int16_t readInt16(const uint8_t *buffer, int index)
     {
@@ -70,6 +80,7 @@ void Accelerometer::calibrate()
 void Accelerometer::calibrateGyroscopeOffset()
 {
     std::array<int64_t, gyroscopeAxisCount> offsetSum{};
+    int64_t accelerationForwardSum = 0;
 
     for (int sample = 0; sample < gyroscopeCalibrationSamples; sample++)
     {
@@ -79,6 +90,8 @@ void Accelerometer::calibrateGyroscopeOffset()
         {
             offsetSum[axis] += readInt16(receiveBuffer, axis * 2);
         }
+        // Robot stands still, so forward acceleration is only sensor offset and tilt
+        accelerationForwardSum += readInt16(receiveBuffer, accelerationForwardIndex);
 
         vTaskDelay(gyroscopeCalibrationDelayTicks);
     }
@@ -87,11 +100,13 @@ void Accelerometer::calibrateGyroscopeOffset()
     {
         gyroscopeOffset[axis] = static_cast<int16_t>(offsetSum[axis] / gyroscopeCalibrationSamples);
     }
+    accelerationForwardOffset = static_cast<int16_t>(accelerationForwardSum / gyroscopeCalibrationSamples);
 
     printf("Gyroscope offset: x=%d y=%d z=%d\n",
            gyroscopeOffset[0],
            gyroscopeOffset[1],
            gyroscopeOffset[2]);
+    printf("Acceleration forward offset: %d\n", accelerationForwardOffset);
 }
 
 int Accelerometer::receiveData()
@@ -123,9 +138,14 @@ int Accelerometer::receiveData()
     return 21;
 }
 
-// Packet Accelerometer::receivePackedData()
-// {
-//     packedData[0] = 0x67;
-//     std::memcpy(packedData + 1, &data, sizeof(AccelerometerData));
-//     return Packet(packedData, 21);
-// }
+void Accelerometer::readMotion(float &gyroZ, float &accelForward)
+{
+    uint8_t buffer[12];
+    i2c.transmitReceive(slave, dataRegister, buffer, 12);
+
+    const int correctedGyroscope = readInt16(buffer, gyroscopeZIndex) - gyroscopeOffset[2];
+    gyroZ = static_cast<float>(correctedGyroscope) / gyroscopeLsbPerDps * degToRad;
+
+    const int correctedAcceleration = readInt16(buffer, accelerationForwardIndex) - accelerationForwardOffset;
+    accelForward = accelerationForwardSign * static_cast<float>(correctedAcceleration) / accelerationLsbPerMps2;
+}

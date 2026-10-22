@@ -1,47 +1,44 @@
 #pragma once
 
 #include <cstdint>
-#include "Motor/Encoder.hpp"
-#include "EKF/VelocityEkf.hpp"
 #include "pid_ctrl.h"
 
 /*
-Closed-loop velocity controller for a single motor.
-Uses the official espressif/pid_ctrl block and fuses
-encoder + IMU acceleration through a VelocityEkf.
+Closed-loop speed controller.
+Feedforward duty from target speed plus correction from the official
+espressif/pid_ctrl block, with speed estimated by KalmanFilter in MotorManager.
+Feedforward starts both motors with a sensible duty at once,
+so PID only corrects small differences.
 
 Usage:
   1. Call setTarget(velocity_mps) to set desired speed.
-  2. Call tick(imuAccelMps2, dt) at a fixed rate — it reads
-     the encoder, runs EKF, computes PID error and returns
-     a PWM duty value in [0, 255].
+  2. Call tick(measuredVelocity) at a fixed rate — it computes
+     feedforward + PID and returns a PWM duty value in [0, maxOutput].
 */
 class Controller
 {
 public:
-    Controller(Encoder &encoder);
+    // maxOutput      – maximum PWM duty, leaves room for heading correction
+    // velocityToDuty – feedforward PWM duty per m/s of target speed
+    Controller(float maxOutput, float velocityToDuty);
     ~Controller();
 
-    // Set desired velocity in m/s (positive = forward).
+    // Set desired speed in m/s. Direction is set by Motor, so always positive.
     void setTarget(float velocityMps);
 
     // Run one control cycle.
-    //   imuAccelMps2 – forward acceleration from IMU (m/s²)
-    //   dt           – elapsed time since last call (s)
-    // Returns PWM duty [0, 255] to apply to the motor.
-    uint8_t tick(float imuAccelMps2, float dt);
-    uint8_t tick(float imuAccelMps2, float imuGyroZ, float dt, float encoderYaw = 0.0f);
-
-    VelocityEkf &getEkf() { return ekf; }
-    const VelocityEkf &getEkf() const { return ekf; }
+    //   measuredVelocity – current speed in m/s
+    // Returns PWM duty [0, maxOutput] to apply to the motors.
+    uint8_t tick(float measuredVelocity);
 
     void reset();
 
 private:
-    Encoder &encoder;
-    VelocityEkf ekf;
+    const float maxOutput;
+    const float velocityToDuty;
     pid_ctrl_block_handle_t pid;
 
     float targetVelocity{0.0f};
-    int64_t lastPulseCount{0};
+
+    void createPid();
 };

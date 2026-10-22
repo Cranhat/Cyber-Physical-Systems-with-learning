@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include "Accelerometer/Accelerometer.hpp"
 #include "DataExchanger/DataExchanger.hpp"
@@ -7,12 +8,13 @@
 #include "Lidar/Lidar.hpp"
 #include "Motor/MotorManager.hpp"
 
-enum State
+enum State : uint32_t
 {
-    stopped,
-    connected,
-    running,
-    crashed
+    Idle,
+    Calibrating,
+    Ready,
+    Processing,
+    Failure
 };
 
 /*
@@ -25,18 +27,13 @@ public:
     ~Robot();
 
     DataExchanger &dataExchanger;
-    void moveMotorsForEncoderTicksCount(int64_t ticks, PowerMode powerMode, float imuAccel = 0.0f, float imuGyroZ = 0.0f);
-    void rotateMotorsForEncoderTicksCount(int64_t ticks, PowerMode powerMode, float imuGyroZ = 0.0f);
-    void moveWithVelocity(float velocityInMpS, float imuAccel = 0.0f, float imuGyroZ = 0.0f);
-    void moveForDistance(float distanceInMeters, float velocityInMpS = 0.2f, float imuAccel = 0.0f, float imuGyroZ = 0.0f);
-    void rotateForAngle(float angleInDegrees, float speedMps = 0.2f, float imuGyroZ = 0.0f);
+    void moveForDistance(float distanceInMeters, PowerMode powerMode = slow);
+    void rotateForAngle(float angleInDegrees, PowerMode powerMode = slow);
     void stopMotors();
 
-    // 2D Pose estimated by EKF
-    float getX() const { return motorManager.getX(); }
-    float getY() const { return motorManager.getY(); }
-    float getYaw() const { return motorManager.getYaw(); }
-    float getYawDegrees() const { return motorManager.getYawDegrees(); }
+    // State can be changed and read from different tasks
+    void setState(State newState);
+    State getState() const;
 
 private:
     Accelerometer &accelerometer;
@@ -44,7 +41,7 @@ private:
     Lidar &lidar;
     MotorManager &motorManager;
 
-    State state = stopped;
+    std::atomic<State> state{Calibrating};
 
     void start();
     void stop();

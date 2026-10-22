@@ -1,9 +1,10 @@
 idf_component_register(SRCS 
     "Accelerometer/Accelerometer.cpp"
     "DataExchanger/DataExchanger.cpp" 
-    "EKF/VelocityEkf.cpp"
     "I2c/I2c.cpp"
     "I2c/I2cSlave.cpp"
+    "Kalman/KalmanFilter.cpp"
+    "Kalman/MotionEstimator.cpp"
     "Led/Led.cpp"
     "Led/Leds.cpp"
     "Lidar/Lidar.cpp"

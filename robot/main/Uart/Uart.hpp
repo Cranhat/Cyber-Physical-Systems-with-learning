@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <driver/uart.h>
-#include "DataExchanger/Packet.hpp"
 
 /*
 Class to communicate rx and tx via uart.
