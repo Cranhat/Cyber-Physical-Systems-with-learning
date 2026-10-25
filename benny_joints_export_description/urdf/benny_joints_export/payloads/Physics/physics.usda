@@ -1,0 +1,230 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "URDF USD Converter v0.3.2 (patched for Isaac Sim)"
+        string patchNotes = "Fixed zero inertia, removed world fixed root_joint, passive casters, velocity drives on wheels; wheel contact friction via PhysicsMaterial bindings in instances.usda"
+    }
+    defaultPrim = "benny_joints_export"
+    endTimeCode = 1000000
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    startTimeCode = 0
+    upAxis = "Z"
+)
+
+over "benny_joints_export"
+{
+    over "Geometry"
+    {
+        over "base_link" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsArticulationRootAPI", "NewtonArticulationRootAPI", "PhysicsMassAPI", "NewtonMassAPI"]
+        )
+        {
+            # Fusion Y-up -> Isaac Z-up (Rx +90 deg)
+            quatf xformOp:orient = (0.70710677, 0.70710677, 0, 0)
+            float3 xformOp:scale = (1, 1, 1)
+            double3 xformOp:translate = (0, 0, 0.021)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            double[] newton:inertia = [0.003256, 0.004607, 0.003091, -0.000015, 0.000007, 0.000044]
+            bool newton:selfCollisionEnabled = 0
+            point3f physics:centerOfMass = (-0.00033881277, 0.020512905, -0.011617809)
+            float3 physics:diagonalInertia = (0.0030893923, 0.00325617, 0.004608438)
+            float physics:mass = 1.8646476
+            quatf physics:principalAxes = (-0.49848792, 0.478758, 0.5062853, 0.51572835)
+
+            over "left_wheel_1" (
+                prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "NewtonMassAPI"]
+            )
+            {
+                double[] newton:inertia = [0.000003, 0.000002, 0.000002, 0, 0, 0]
+                point3f physics:centerOfMass = (0.010125425, 0, 0)
+                float3 physics:diagonalInertia = (0.000002, 0.000002, 0.000003)
+                float physics:mass = 0.02286217
+                quatf physics:principalAxes = (0.5, 0.5, 0.5, 0.5)
+            }
+
+            over "right_wheel_1" (
+                prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "NewtonMassAPI"]
+            )
+            {
+                double[] newton:inertia = [0.000003, 0.000002, 0.000002, 0, 0, 0]
+                point3f physics:centerOfMass = (-0.010125425, 0, 0)
+                float3 physics:diagonalInertia = (0.000002, 0.000002, 0.000003)
+                float physics:mass = 0.02286217
+                quatf physics:principalAxes = (0.5, 0.5, 0.5, 0.5)
+            }
+
+            over "front_wheel_top_1" (
+                prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "NewtonMassAPI"]
+            )
+            {
+                double[] newton:inertia = [0.000001, 0.000001, 0.000001, 0, 0, 0]
+                point3f physics:centerOfMass = (0, -0.0043071434, 0.0029543976)
+                float3 physics:diagonalInertia = (0.000001, 0.000001, 0.000001)
+                float physics:mass = 0.01635825
+                quatf physics:principalAxes = (1, 0, 0, 0)
+
+                over "front_wheel_bottom_1" (
+                    prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "NewtonMassAPI"]
+                )
+                {
+                    double[] newton:inertia = [0.000001, 0.000001, 0.000001, 0, 0, 0]
+                    point3f physics:centerOfMass = (-0.0045, 0, 0)
+                    float3 physics:diagonalInertia = (0.000001, 0.000001, 0.000001)
+                    float physics:mass = 0.007990327
+                    quatf physics:principalAxes = (1, 0, 0, 0)
+                }
+            }
+
+            over "rear_wheel_top_1" (
+                prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "NewtonMassAPI"]
+            )
+            {
+                double[] newton:inertia = [0.000001, 0.000001, 0.000001, 0, 0, 0]
+                point3f physics:centerOfMass = (0, -0.0043071434, 0.0029543976)
+                float3 physics:diagonalInertia = (0.000001, 0.000001, 0.000001)
+                float physics:mass = 0.01635825
+                quatf physics:principalAxes = (1, 0, 0, 0)
+
+                over "rear_wheel_bottom_1" (
+                    prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "NewtonMassAPI"]
+                )
+                {
+                    double[] newton:inertia = [0.000001, 0.000001, 0.000001, 0, 0, 0]
+                    point3f physics:centerOfMass = (-0.0045, 0, 0)
+                    float3 physics:diagonalInertia = (0.000001, 0.000001, 0.000001)
+                    float physics:mass = 0.007990327
+                    quatf physics:principalAxes = (1, 0, 0, 0)
+                }
+            }
+        }
+    }
+
+    over "Physics"
+    {
+        # left_wheel_joint — velocity drive
+        def PhysicsRevoluteJoint "left_wheel_joint" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+            uniform token physics:axis = "X"
+            custom rel physics:body0
+            append rel physics:body0 = </benny_joints_export/Geometry/base_link>
+            custom rel physics:body1
+            append rel physics:body1 = </benny_joints_export/Geometry/base_link/left_wheel_1>
+            point3f physics:localPos0 = (0.0708, -0.005, 0)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (1, 0, 0, 0)
+            quatf physics:localRot1 = (1, 0, 0, 0)
+            float drive:angular:physics:damping = 1000
+            float drive:angular:physics:maxForce = 5
+            float drive:angular:physics:stiffness = 0
+            float drive:angular:physics:targetVelocity = 0
+            uniform token drive:angular:physics:type = "force"
+        }
+
+        # right_wheel_joint — velocity drive
+        def PhysicsRevoluteJoint "right_wheel_joint" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+            uniform token physics:axis = "X"
+            custom rel physics:body0
+            append rel physics:body0 = </benny_joints_export/Geometry/base_link>
+            custom rel physics:body1
+            append rel physics:body1 = </benny_joints_export/Geometry/base_link/right_wheel_1>
+            point3f physics:localPos0 = (-0.0708, -0.005, 0)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (-0, 0, -1, 0)
+            quatf physics:localRot1 = (-0, 0, -1, 0)
+            float drive:angular:physics:damping = 1000
+            float drive:angular:physics:maxForce = 5
+            float drive:angular:physics:stiffness = 0
+            float drive:angular:physics:targetVelocity = 0
+            uniform token drive:angular:physics:type = "force"
+        }
+
+        # front_caster_yaw_joint — passive
+        def PhysicsRevoluteJoint "front_caster_yaw_joint" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+            uniform token physics:axis = "Y"
+            custom rel physics:body0
+            append rel physics:body0 = </benny_joints_export/Geometry/base_link>
+            custom rel physics:body1
+            append rel physics:body1 = </benny_joints_export/Geometry/base_link/front_wheel_top_1>
+            point3f physics:localPos0 = (0, -0.0035, 0.05)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (0, -1, 0, 0)
+            quatf physics:localRot1 = (0, -1, 0, 0)
+            float drive:angular:physics:damping = 0.01
+            float drive:angular:physics:stiffness = 0
+            float drive:angular:physics:maxForce = 0
+            uniform token drive:angular:physics:type = "force"
+        }
+
+        # front_caster_roll_joint — passive
+        def PhysicsRevoluteJoint "front_caster_roll_joint" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+            uniform token physics:axis = "X"
+            custom rel physics:body0
+            append rel physics:body0 = </benny_joints_export/Geometry/base_link/front_wheel_top_1>
+            custom rel physics:body1
+            append rel physics:body1 = </benny_joints_export/Geometry/base_link/front_wheel_top_1/front_wheel_bottom_1>
+            point3f physics:localPos0 = (0.0045, -0.01, 0.011)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (-0, 0, -1, 0)
+            quatf physics:localRot1 = (-0, 0, -1, 0)
+            float drive:angular:physics:damping = 0.01
+            float drive:angular:physics:stiffness = 0
+            float drive:angular:physics:maxForce = 0
+            uniform token drive:angular:physics:type = "force"
+        }
+
+        # rear_caster_yaw_joint — passive
+        def PhysicsRevoluteJoint "rear_caster_yaw_joint" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+            uniform token physics:axis = "Y"
+            custom rel physics:body0
+            append rel physics:body0 = </benny_joints_export/Geometry/base_link>
+            custom rel physics:body1
+            append rel physics:body1 = </benny_joints_export/Geometry/base_link/rear_wheel_top_1>
+            point3f physics:localPos0 = (0, -0.0035, -0.05)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (0, -1, 0, 0)
+            quatf physics:localRot1 = (0, -1, 0, 0)
+            float drive:angular:physics:damping = 0.01
+            float drive:angular:physics:stiffness = 0
+            float drive:angular:physics:maxForce = 0
+            uniform token drive:angular:physics:type = "force"
+        }
+
+        # rear_caster_roll_joint — passive
+        def PhysicsRevoluteJoint "rear_caster_roll_joint" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+        )
+        {
+            uniform token physics:axis = "X"
+            custom rel physics:body0
+            append rel physics:body0 = </benny_joints_export/Geometry/base_link/rear_wheel_top_1>
+            custom rel physics:body1
+            append rel physics:body1 = </benny_joints_export/Geometry/base_link/rear_wheel_top_1/rear_wheel_bottom_1>
+            point3f physics:localPos0 = (0.0045, -0.01, 0.011)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (-0, 0, -1, 0)
+            quatf physics:localRot1 = (-0, 0, -1, 0)
+            float drive:angular:physics:damping = 0.01
+            float drive:angular:physics:stiffness = 0
+            float drive:angular:physics:maxForce = 0
+            uniform token drive:angular:physics:type = "force"
+        }
+
+        # No PhysicsFixedJoint root_joint — mobile base free in world
+    }
+}

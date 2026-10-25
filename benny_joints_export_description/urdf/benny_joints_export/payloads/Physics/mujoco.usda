@@ -1,0 +1,79 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "URDF USD Converter v0.3.2 (patched for Isaac Sim)"
+    }
+    defaultPrim = "benny_joints_export"
+    endTimeCode = 1000000
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    startTimeCode = 0
+    subLayers = [
+        @./physics.usda@
+    ]
+    upAxis = "Z"
+)
+
+over "benny_joints_export"
+{
+    over "Physics"
+    {
+        over "left_wheel_joint" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+            prepend apiSchemas = ["MjcJointAPI"]
+        )
+        {
+        }
+
+        over "right_wheel_joint" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+            prepend apiSchemas = ["MjcJointAPI"]
+        )
+        {
+        }
+
+        over "front_caster_yaw_joint" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+            prepend apiSchemas = ["MjcJointAPI"]
+        )
+        {
+        }
+
+        over "front_caster_roll_joint" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+            prepend apiSchemas = ["MjcJointAPI"]
+        )
+        {
+        }
+
+        over "rear_caster_yaw_joint" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+            prepend apiSchemas = ["MjcJointAPI"]
+        )
+        {
+        }
+
+        over "rear_caster_roll_joint" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+            prepend apiSchemas = ["MjcJointAPI"]
+        )
+        {
+        }
+
+        def MjcActuator "left_wheel_joint_actuator"
+        {
+            uniform double mjc:forceRange:max = 5
+            uniform double mjc:forceRange:min = -5
+            custom rel mjc:target
+            append rel mjc:target = </benny_joints_export/Physics/left_wheel_joint>
+        }
+
+        def MjcActuator "right_wheel_joint_actuator"
+        {
+            uniform double mjc:forceRange:max = 5
+            uniform double mjc:forceRange:min = -5
+            custom rel mjc:target
+            append rel mjc:target = </benny_joints_export/Physics/right_wheel_joint>
+        }
+    }
+}

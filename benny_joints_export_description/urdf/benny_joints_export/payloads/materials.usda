@@ -1,0 +1,66 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "URDF USD Converter v0.3.2"
+    }
+    endTimeCode = 1000000
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    startTimeCode = 0
+    upAxis = "Z"
+)
+
+def Scope "Materials"
+{
+    def Material "silver"
+    {
+        color3f inputs:diffuseColor = (0.4479884, 0.44798842, 0.44798836)
+        float inputs:metallic = 0
+        float inputs:opacity = 1
+        float inputs:roughness = 0.5
+        token inputs:wrapMode = "repeat"
+        token outputs:displacement (
+            displayGroup = "Outputs"
+        )
+        token outputs:surface (
+            displayGroup = "Outputs"
+        )
+        prepend token outputs:surface.connect = </Materials/silver/PreviewSurface.outputs:surface>
+        token outputs:volume (
+            displayGroup = "Outputs"
+        )
+
+        def Shader "PreviewSurface" (
+            apiSchemas = ["NodeDefAPI"]
+        )
+        {
+            token info:id = "UsdPreviewSurface"
+            prepend color3f inputs:diffuseColor.connect = </Materials/silver.inputs:diffuseColor>
+            prepend float inputs:metallic.connect = </Materials/silver.inputs:metallic>
+            prepend float inputs:opacity.connect = </Materials/silver.inputs:opacity>
+            prepend float inputs:roughness.connect = </Materials/silver.inputs:roughness>
+            token outputs:surface
+        }
+    }
+
+    # Contact friction (Gazebo mu≈1.0 on drive wheels). Bind via material:binding:physics.
+    def Material "friction_left_right" (
+        prepend apiSchemas = ["PhysicsMaterialAPI"]
+    )
+    {
+        float physics:dynamicFriction = 0.9
+        float physics:restitution = 0
+        float physics:staticFriction = 1
+    }
+
+    # Contact friction (Gazebo mu≈0.8 on caster rollers).
+    def Material "friction_front_rear" (
+        prepend apiSchemas = ["PhysicsMaterialAPI"]
+    )
+    {
+        float physics:dynamicFriction = 0.7
+        float physics:restitution = 0
+        float physics:staticFriction = 0.8
+    }
+}
+

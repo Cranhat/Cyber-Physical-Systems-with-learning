@@ -1,0 +1,228 @@
+<?xml version="1.0" ?>
+<robot name="benny_joints_export" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+<!--
+  Fusion export was Y-up. base_footprint + fixed Rx(+90°) puts the robot in ROS/Isaac Z-up.
+  Re-import this URDF into Isaac after edits (or use the patched USD under urdf/benny_joints_export/).
+-->
+
+<xacro:include filename="materials.xacro" />
+<xacro:include filename="benny_joints_export.trans" />
+<xacro:include filename="benny_joints_export.gazebo" />
+
+<!-- Relative to this URDF; works for Isaac file import and local xacro. -->
+<xacro:property name="mesh_pkg" value="../meshes" />
+<!-- PhysX-safe inertia for tiny caster rollers (~8 g); Fusion exported zeros -->
+<xacro:property name="caster_roll_ixx" value="1e-6" />
+<xacro:property name="caster_roll_iyy" value="1e-6" />
+<xacro:property name="caster_roll_izz" value="1e-6" />
+
+<!-- World / Isaac gravity frame (Z-up). Keep base_link in Fusion Y-up mesh frame. -->
+<link name="base_footprint"/>
+<joint name="base_footprint_joint" type="fixed">
+  <origin xyz="0 0 0" rpy="1.5707963267948966 0 0"/>
+  <parent link="base_footprint"/>
+  <child link="base_link"/>
+</joint>
+
+<link name="base_link">
+  <inertial>
+    <origin xyz="-0.0003388127606072584 0.02051290543267288 -0.011617808758929826" rpy="0 0 0"/>
+    <mass value="1.864647621796478"/>
+    <inertia ixx="0.003256" iyy="0.004607" izz="0.003091" ixy="-1.5e-05" iyz="4.4e-05" ixz="7e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://${mesh_pkg}/base_link.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://${mesh_pkg}/base_link.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="left_wheel_1">
+  <inertial>
+    <origin xyz="0.01012542493809615 0 0" rpy="0 0 0"/>
+    <mass value="0.02286217019822317"/>
+    <inertia ixx="3e-06" iyy="2e-06" izz="2e-06" ixy="0.0" iyz="0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.0708 0.005 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://${mesh_pkg}/left_wheel_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.0708 0.005 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://${mesh_pkg}/left_wheel_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="right_wheel_1">
+  <inertial>
+    <origin xyz="-0.010125424938096164 0 0" rpy="0 0 0"/>
+    <mass value="0.022862170198223546"/>
+    <inertia ixx="3e-06" iyy="2e-06" izz="2e-06" ixy="0.0" iyz="0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.0708 0.005 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://${mesh_pkg}/right_wheel_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.0708 0.005 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://${mesh_pkg}/right_wheel_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="front_wheel_top_1">
+  <inertial>
+    <origin xyz="0 -0.004307143338962053 0.0029543975469227754" rpy="0 0 0"/>
+    <mass value="0.016358250375028013"/>
+    <inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0.0" iyz="0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="0 0.005 -0.05" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://${mesh_pkg}/front_wheel_top_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0 0.005 -0.05" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://${mesh_pkg}/front_wheel_top_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="front_wheel_bottom_1">
+  <inertial>
+    <origin xyz="-0.0045 0 0" rpy="0 0 0"/>
+    <mass value="0.00799032675514028"/>
+    <inertia ixx="${caster_roll_ixx}" iyy="${caster_roll_iyy}" izz="${caster_roll_izz}" ixy="0.0" iyz="0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.0045 0.015 -0.061" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://${mesh_pkg}/front_wheel_bottom_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.0045 0.015 -0.061" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://${mesh_pkg}/front_wheel_bottom_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="rear_wheel_top_1">
+  <inertial>
+    <origin xyz="0 -0.004307143338962053 0.0029543975469227685" rpy="0 0 0"/>
+    <mass value="0.016358250375028017"/>
+    <inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0.0" iyz="0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="0 0.005 0.05" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://${mesh_pkg}/rear_wheel_top_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0 0.005 0.05" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://${mesh_pkg}/rear_wheel_top_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="rear_wheel_bottom_1">
+  <inertial>
+    <origin xyz="-0.0045 0 0" rpy="0 0 0"/>
+    <mass value="0.00799032675514028"/>
+    <inertia ixx="${caster_roll_ixx}" iyy="${caster_roll_iyy}" izz="${caster_roll_izz}" ixy="0.0" iyz="0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.0045 0.015 0.039" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://${mesh_pkg}/rear_wheel_bottom_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.0045 0.015 0.039" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://${mesh_pkg}/rear_wheel_bottom_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<!-- Drive wheels -->
+<joint name="left_wheel_joint" type="continuous">
+  <origin xyz="0.0708 -0.005 0" rpy="0 0 0"/>
+  <parent link="base_link"/>
+  <child link="left_wheel_1"/>
+  <axis xyz="1 0 0"/>
+  <dynamics damping="0.0" friction="0.0"/>
+  <limit effort="5.0" velocity="20.0"/>
+</joint>
+
+<joint name="right_wheel_joint" type="continuous">
+  <origin xyz="-0.0708 -0.005 0" rpy="0 0 0"/>
+  <parent link="base_link"/>
+  <child link="right_wheel_1"/>
+  <axis xyz="-1 0 0"/>
+  <dynamics damping="0.0" friction="0.0"/>
+  <limit effort="5.0" velocity="20.0"/>
+</joint>
+
+<!-- Front caster: yaw (passive) then roll (passive) -->
+<joint name="front_caster_yaw_joint" type="continuous">
+  <origin xyz="0 -0.0035 0.05" rpy="0 0 0"/>
+  <parent link="base_link"/>
+  <child link="front_wheel_top_1"/>
+  <axis xyz="0 -1 0"/>
+  <dynamics damping="0.01" friction="0.0"/>
+</joint>
+
+<joint name="front_caster_roll_joint" type="continuous">
+  <origin xyz="0.0045 -0.01 0.011" rpy="0 0 0"/>
+  <parent link="front_wheel_top_1"/>
+  <child link="front_wheel_bottom_1"/>
+  <axis xyz="-1 0 0"/>
+  <dynamics damping="0.01" friction="0.0"/>
+</joint>
+
+<!-- Rear caster -->
+<joint name="rear_caster_yaw_joint" type="continuous">
+  <origin xyz="0 -0.0035 -0.05" rpy="0 0 0"/>
+  <parent link="base_link"/>
+  <child link="rear_wheel_top_1"/>
+  <axis xyz="0 -1 0"/>
+  <dynamics damping="0.01" friction="0.0"/>
+</joint>
+
+<joint name="rear_caster_roll_joint" type="continuous">
+  <origin xyz="0.0045 -0.01 0.011" rpy="0 0 0"/>
+  <parent link="rear_wheel_top_1"/>
+  <child link="rear_wheel_bottom_1"/>
+  <axis xyz="-1 0 0"/>
+  <dynamics damping="0.01" friction="0.0"/>
+</joint>
+
+</robot>

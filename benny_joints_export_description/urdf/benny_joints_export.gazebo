@@ -1,0 +1,62 @@
+<?xml version="1.0" ?>
+<robot name="benny_joints_export" xmlns:xacro="http://www.ros.org/wiki/xacro" >
+
+<xacro:property name="body_color" value="Gazebo/Silver" />
+
+<gazebo>
+  <plugin name="control" filename="libgazebo_ros_control.so"/>
+</gazebo>
+
+<gazebo reference="base_link">
+  <material>${body_color}</material>
+  <mu1>0.5</mu1>
+  <mu2>0.5</mu2>
+  <self_collide>false</self_collide>
+  <gravity>true</gravity>
+</gazebo>
+
+<!-- Drive wheels: higher friction -->
+<gazebo reference="left_wheel_1">
+  <material>${body_color}</material>
+  <mu1>1.0</mu1>
+  <mu2>1.0</mu2>
+  <self_collide>false</self_collide>
+</gazebo>
+
+<gazebo reference="right_wheel_1">
+  <material>${body_color}</material>
+  <mu1>1.0</mu1>
+  <mu2>1.0</mu2>
+  <self_collide>false</self_collide>
+</gazebo>
+
+<!-- Casters -->
+<gazebo reference="front_wheel_top_1">
+  <material>${body_color}</material>
+  <mu1>0.3</mu1>
+  <mu2>0.3</mu2>
+  <self_collide>false</self_collide>
+</gazebo>
+
+<gazebo reference="front_wheel_bottom_1">
+  <material>${body_color}</material>
+  <mu1>0.8</mu1>
+  <mu2>0.8</mu2>
+  <self_collide>false</self_collide>
+</gazebo>
+
+<gazebo reference="rear_wheel_top_1">
+  <material>${body_color}</material>
+  <mu1>0.3</mu1>
+  <mu2>0.3</mu2>
+  <self_collide>false</self_collide>
+</gazebo>
+
+<gazebo reference="rear_wheel_bottom_1">
+  <material>${body_color}</material>
+  <mu1>0.8</mu1>
+  <mu2>0.8</mu2>
+  <self_collide>false</self_collide>
+</gazebo>
+
+</robot>

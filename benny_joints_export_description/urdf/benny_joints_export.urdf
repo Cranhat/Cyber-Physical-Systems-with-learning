@@ -1,0 +1,274 @@
+<?xml version="1.0" ?>
+<!-- Generated from benny_joints_export.xacro (Isaac/ROS Z-up fixes). Prefer editing the .xacro. -->
+<robot name="benny_joints_export">
+  <material name="silver">
+    <color rgba="0.700 0.700 0.700 1.000"/>
+  </material>
+
+  <transmission name="left_wheel_tran">
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="left_wheel_joint">
+      <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="left_wheel_actr">
+      <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+  </transmission>
+  <transmission name="right_wheel_tran">
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="right_wheel_joint">
+      <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="right_wheel_actr">
+      <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+  </transmission>
+
+  <gazebo>
+    <plugin filename="libgazebo_ros_control.so" name="control"/>
+  </gazebo>
+  <gazebo reference="base_link">
+    <material>Gazebo/Silver</material>
+    <mu1>0.5</mu1>
+    <mu2>0.5</mu2>
+    <self_collide>false</self_collide>
+    <gravity>true</gravity>
+  </gazebo>
+  <gazebo reference="left_wheel_1">
+    <material>Gazebo/Silver</material>
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+    <self_collide>false</self_collide>
+  </gazebo>
+  <gazebo reference="right_wheel_1">
+    <material>Gazebo/Silver</material>
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+    <self_collide>false</self_collide>
+  </gazebo>
+  <gazebo reference="front_wheel_top_1">
+    <material>Gazebo/Silver</material>
+    <mu1>0.3</mu1>
+    <mu2>0.3</mu2>
+    <self_collide>false</self_collide>
+  </gazebo>
+  <gazebo reference="front_wheel_bottom_1">
+    <material>Gazebo/Silver</material>
+    <mu1>0.8</mu1>
+    <mu2>0.8</mu2>
+    <self_collide>false</self_collide>
+  </gazebo>
+  <gazebo reference="rear_wheel_top_1">
+    <material>Gazebo/Silver</material>
+    <mu1>0.3</mu1>
+    <mu2>0.3</mu2>
+    <self_collide>false</self_collide>
+  </gazebo>
+  <gazebo reference="rear_wheel_bottom_1">
+    <material>Gazebo/Silver</material>
+    <mu1>0.8</mu1>
+    <mu2>0.8</mu2>
+    <self_collide>false</self_collide>
+  </gazebo>
+
+  <link name="base_footprint"/>
+  <joint name="base_footprint_joint" type="fixed">
+    <origin rpy="1.5707963267948966 0 0" xyz="0 0 0"/>
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+  </joint>
+
+  <link name="base_link">
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.0003388127606072584 0.02051290543267288 -0.011617808758929826"/>
+      <mass value="1.864647621796478"/>
+      <inertia ixx="0.003256" ixy="-1.5e-05" ixz="7e-06" iyy="0.004607" iyz="4.4e-05" izz="0.003091"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="file://../meshes/base_link.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="silver"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="file://../meshes/base_link.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <link name="left_wheel_1">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.01012542493809615 0 0"/>
+      <mass value="0.02286217019822317"/>
+      <inertia ixx="3e-06" ixy="0.0" ixz="0.0" iyy="2e-06" iyz="0.0" izz="2e-06"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="-0.0708 0.005 0"/>
+      <geometry>
+        <mesh filename="file://../meshes/left_wheel_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="silver"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="-0.0708 0.005 0"/>
+      <geometry>
+        <mesh filename="file://../meshes/left_wheel_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <link name="right_wheel_1">
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.010125424938096164 0 0"/>
+      <mass value="0.022862170198223546"/>
+      <inertia ixx="3e-06" ixy="0.0" ixz="0.0" iyy="2e-06" iyz="0.0" izz="2e-06"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0.0708 0.005 0"/>
+      <geometry>
+        <mesh filename="file://../meshes/right_wheel_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="silver"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0.0708 0.005 0"/>
+      <geometry>
+        <mesh filename="file://../meshes/right_wheel_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <link name="front_wheel_top_1">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 -0.004307143338962053 0.0029543975469227754"/>
+      <mass value="0.016358250375028013"/>
+      <inertia ixx="1e-06" ixy="0.0" ixz="0.0" iyy="1e-06" iyz="0.0" izz="1e-06"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0.005 -0.05"/>
+      <geometry>
+        <mesh filename="file://../meshes/front_wheel_top_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="silver"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0.005 -0.05"/>
+      <geometry>
+        <mesh filename="file://../meshes/front_wheel_top_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <link name="front_wheel_bottom_1">
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.0045 0 0"/>
+      <mass value="0.00799032675514028"/>
+      <inertia ixx="1e-06" ixy="0.0" ixz="0.0" iyy="1e-06" iyz="0.0" izz="1e-06"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="-0.0045 0.015 -0.061"/>
+      <geometry>
+        <mesh filename="file://../meshes/front_wheel_bottom_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="silver"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="-0.0045 0.015 -0.061"/>
+      <geometry>
+        <mesh filename="file://../meshes/front_wheel_bottom_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <link name="rear_wheel_top_1">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 -0.004307143338962053 0.0029543975469227685"/>
+      <mass value="0.016358250375028017"/>
+      <inertia ixx="1e-06" ixy="0.0" ixz="0.0" iyy="1e-06" iyz="0.0" izz="1e-06"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0.005 0.05"/>
+      <geometry>
+        <mesh filename="file://../meshes/rear_wheel_top_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="silver"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0.005 0.05"/>
+      <geometry>
+        <mesh filename="file://../meshes/rear_wheel_top_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <link name="rear_wheel_bottom_1">
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.0045 0 0"/>
+      <mass value="0.00799032675514028"/>
+      <inertia ixx="1e-06" ixy="0.0" ixz="0.0" iyy="1e-06" iyz="0.0" izz="1e-06"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="-0.0045 0.015 0.039"/>
+      <geometry>
+        <mesh filename="file://../meshes/rear_wheel_bottom_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="silver"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="-0.0045 0.015 0.039"/>
+      <geometry>
+        <mesh filename="file://../meshes/rear_wheel_bottom_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="left_wheel_joint" type="continuous">
+    <origin rpy="0 0 0" xyz="0.0708 -0.005 0"/>
+    <parent link="base_link"/>
+    <child link="left_wheel_1"/>
+    <axis xyz="1 0 0"/>
+    <dynamics damping="0.0" friction="0.0"/>
+    <limit effort="5.0" velocity="20.0"/>
+  </joint>
+  <joint name="right_wheel_joint" type="continuous">
+    <origin rpy="0 0 0" xyz="-0.0708 -0.005 0"/>
+    <parent link="base_link"/>
+    <child link="right_wheel_1"/>
+    <axis xyz="-1 0 0"/>
+    <dynamics damping="0.0" friction="0.0"/>
+    <limit effort="5.0" velocity="20.0"/>
+  </joint>
+  <joint name="front_caster_yaw_joint" type="continuous">
+    <origin rpy="0 0 0" xyz="0 -0.0035 0.05"/>
+    <parent link="base_link"/>
+    <child link="front_wheel_top_1"/>
+    <axis xyz="0 -1 0"/>
+    <dynamics damping="0.01" friction="0.0"/>
+  </joint>
+  <joint name="front_caster_roll_joint" type="continuous">
+    <origin rpy="0 0 0" xyz="0.0045 -0.01 0.011"/>
+    <parent link="front_wheel_top_1"/>
+    <child link="front_wheel_bottom_1"/>
+    <axis xyz="-1 0 0"/>
+    <dynamics damping="0.01" friction="0.0"/>
+  </joint>
+  <joint name="rear_caster_yaw_joint" type="continuous">
+    <origin rpy="0 0 0" xyz="0 -0.0035 -0.05"/>
+    <parent link="base_link"/>
+    <child link="rear_wheel_top_1"/>
+    <axis xyz="0 -1 0"/>
+    <dynamics damping="0.01" friction="0.0"/>
+  </joint>
+  <joint name="rear_caster_roll_joint" type="continuous">
+    <origin rpy="0 0 0" xyz="0.0045 -0.01 0.011"/>
+    <parent link="rear_wheel_top_1"/>
+    <child link="rear_wheel_bottom_1"/>
+    <axis xyz="-1 0 0"/>
+    <dynamics damping="0.01" friction="0.0"/>
+  </joint>
+</robot>
