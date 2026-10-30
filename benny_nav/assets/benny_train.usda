@@ -1,0 +1,42 @@
+#usda 1.0
+(
+    doc = """Training variant of Benny: same geometry/physics as benny_joints_export.usda but WITHOUT the OmniLidar prim (remote S3 asset, needs the RTX renderer). LiDAR for training is the Isaac Lab MultiMeshRayCaster. Select Physics=physx when referencing this file."""
+    defaultPrim = "benny_joints_export"
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "benny_joints_export" (
+    prepend references = @../../benny_joints_export_description/urdf/benny_joints_export/payloads/base.usda@
+    append variantSets = "Physics"
+)
+{
+    over "Geometry"
+    {
+        over "base_link"
+        {
+            # Sensor frame of the 360 deg 2D LiDAR (tracked by the Isaac Lab RayCaster).
+            # Position: 0.087 m along body +y (= world up, the base_link is in the Fusion Y-up frame).
+            # Orientation: inverse of the nominal body orientation Rz(90)*Rx(90) so that the sensor x axis
+            # is the robot forward axis and the sensor z axis is world up at the nominal pose.
+            def Xform "lidar_frame"
+            {
+                quatd xformOp:orient = (0.5, -0.5, -0.5, -0.5)
+                double3 xformOp:translate = (0, 0.087, 0)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+            }
+        }
+    }
+
+    variantSet "Physics" = {
+        "none" {
+
+        }
+        "physx" (
+            prepend payload = @../../benny_joints_export_description/urdf/benny_joints_export/payloads/Physics/physx.usda@
+        ) {
+
+        }
+    }
+}
