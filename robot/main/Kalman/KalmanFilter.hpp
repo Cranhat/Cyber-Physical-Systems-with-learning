@@ -47,6 +47,7 @@ private:
 
     float estimate{0.0f};
     float sensorBias{0.0f};
+    
     float estimateVariance{0.0f};
     float crossCovariance{0.0f};
     float sensorBiasVariance{0.0f};

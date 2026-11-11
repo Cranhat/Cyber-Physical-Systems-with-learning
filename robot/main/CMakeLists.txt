@@ -8,7 +8,6 @@ idf_component_register(SRCS
     "Led/Led.cpp"
     "Led/Leds.cpp"
     "Lidar/Lidar.cpp"
-    "Motor/Controller.cpp"
     "Motor/Encoder.cpp"
     "Motor/Motor.cpp"
     "Motor/MotorManager.cpp"
@@ -29,7 +28,5 @@ idf_component_register(SRCS
     REQUIRES esp_event
     REQUIRES nvs_flash
     REQUIRES esp_timer
-    REQUIRES espressif__pid_ctrl
-    REQUIRES espressif__esp-dsp
     INCLUDE_DIRS ".")
 

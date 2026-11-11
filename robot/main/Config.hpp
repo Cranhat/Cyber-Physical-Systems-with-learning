@@ -38,7 +38,7 @@ namespace config
     constexpr float Kp_sync = 3000.0f;   // 1 cm difference → 30 duty
     constexpr float Ki_sync = 500.0f;    // 1 cm held for 1 s → 5 duty more
     constexpr float Kd_sync = 50.0f;     // 1 cm/s difference → 0.5 duty, damps weaving
-    constexpr float maxSyncDuty = 60.0f; // limit of sync PID output and of its integral part
+    constexpr float maxSyncDuty = 60.0f; // limit of sync PID output
 
     // Braking close to target: duty per meter of remaining distance
     constexpr float Kp_position = 5000.0f; // 2 cm left → 100 duty, at fast (220) braking starts ~4.4 cm before target
@@ -57,12 +57,10 @@ namespace config
     constexpr float minRotation = 0.5f * degToRad;
 
     // Heading PID (duty per rad of heading error), output sign gives rotation direction,
-    // so overshoot is corrected by turning back
-    constexpr float Kp_rotation = 300.0f;            // 30 deg error → ~157 duty
-    constexpr float Ki_rotation = 200.0f;            // only close to target, pushes through friction in the last degrees
-    constexpr float Kd_rotation = 30.0f;             // duty per rad/s from gyroscope, brakes harder when approaching fast
-    constexpr float integralZone = 10.0f * degToRad; // integral is used only when error is smaller
-    constexpr float maxIntegralDuty = 40.0f;         // limit of integral part of PID output
+    // so overshoot is corrected by turning back. Output is limited to PowerMode
+    constexpr float Kp_rotation = 300.0f; // 30 deg error → ~157 duty
+    constexpr float Ki_rotation = 200.0f; // pushes through friction in the last degrees
+    constexpr float Kd_rotation = 30.0f;  // duty per rad/s of turn rate, brakes harder when approaching fast
 
     // Rotation duty: limit ramps up from minRotationDuty to PowerMode in rotationRampTime.
     // Motors do not move below minRotationDuty, so smaller PID output is raised to it

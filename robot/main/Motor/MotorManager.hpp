@@ -24,8 +24,7 @@ While driving straight:
 
 MotionEstimator is told which move is done (setMotion).
 Rotations use its heading and turn rate, control loop runs after every estimate:
-  - heading PID sets rotation duty, derivative is gyroscope turn rate, integral works only
-    close to target; negative output turns back, so overshoot is corrected,
+  - heading PID sets rotation duty, negative output turns back, so overshoot is corrected,
   - duty limit ramps up at start, output smaller than minRotationDuty is raised to it,
   - wheels turn in opposite directions, forward/backward drift of the robot is pushed back,
   - rotation is finished when heading stays within tolerance and robot almost stopped turning.
@@ -52,13 +51,10 @@ public:
 
     void stop();
 
-    // Prints every control loop sample of rotations (CSV lines starting with "rotlog")
-    bool logRotation{false};
-
 private:
     MotionEstimator &motionEstimator;
     std::map<int, Motor> motors;
-    std::map<int, int64_t> targetTicks; // absolute wheel target positions (ticks since boot)
+    std::map<int, int64_t> targetTicks; 
     float targetHeading{0.0f}; // heading robot should have, since boot (rad, clockwise positive)
 
     int64_t distanceToTicks(int motorNumber, float distanceInMeters);

@@ -1,6 +1,7 @@
 #include "MotorManager.hpp"
 
 #include "Config.hpp"
+#include "Motor/Pid.hpp"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <algorithm>
@@ -58,7 +59,6 @@ void MotorManager::rotateForAngle(float angleInDegrees, PowerMode powerMode)
     }
 
     motionEstimator.setMotion(Motion::rotating);
-    const float startHeading = motionEstimator.getHeading();
     const float maxDuty = static_cast<float>(powerMode);
 
     Motor &left = motors.at(leftMotor);
@@ -66,23 +66,15 @@ void MotorManager::rotateForAngle(float angleInDegrees, PowerMode powerMode)
     const int64_t leftStart = left.getEncoderTicks();
     const int64_t rightStart = right.getEncoderTicks();
 
-
-    float integral = 0.0f;
-    float previousError = targetHeading - startHeading;
+    Pid headingPid{Kp_rotation, Ki_rotation, Kd_rotation, maxDuty, controlDt};
     int settledSamples = 0;
     float elapsed = 0.0f;
-
-    float gyroOnlyHeading = startHeading;
-    float maxTurnRate = 0.0f;
 
     while (true)
     {
         motionEstimator.waitForEstimate();
-        const float heading = motionEstimator.getHeading();
         const float turnRate = motionEstimator.getTurnRate();
-        const float error = targetHeading - heading;
-        gyroOnlyHeading += turnRate * controlDt;
-        maxTurnRate = std::max(maxTurnRate, std::abs(turnRate));
+        const float error = targetHeading - motionEstimator.getHeading();
 
         if (std::abs(error) < headingTolerance && std::abs(turnRate) < settledTurnRate)
         {
@@ -102,21 +94,10 @@ void MotorManager::rotateForAngle(float angleInDegrees, PowerMode powerMode)
             break;
         }
 
-        // Integral only close to target, cleared when target is crossed so it does not push over it
-        if ((error > 0.0f) != (previousError > 0.0f))
-        {
-            integral = 0.0f;
-        }
-        if (std::abs(error) < integralZone)
-        {
-            integral = std::clamp(integral + error * controlDt, -maxIntegralDuty / Ki_rotation, maxIntegralDuty / Ki_rotation);
-        }
-        previousError = error;
+        const float pid = headingPid.update(error);
 
-        // Derivative from gyroscope (derivative of error is -turnRate), no noise from differentiating heading
-        const float pid = Kp_rotation * error + Ki_rotation * integral - Kd_rotation * turnRate;
-
-        // Rotation duty, positive turns clockwise. Inside tolerance motors are off, so robot settles
+        // Rotation duty, positive turns clockwise. Inside tolerance motors are off, so robot settles.
+        // Duty limit ramps up at start, duty is never below minRotationDuty so motors still move
         float rotationDuty = 0.0f;
         if (std::abs(error) >= headingTolerance)
         {
@@ -165,9 +146,9 @@ void MotorManager::driveToTargets(PowerMode powerMode)
         reached[motorNumber] = remaining == 0;
     }
 
-    // Sync PID state
-    float syncIntegral = 0.0f;
-    float previousSyncError = 0.0f;
+    // Wheel that is ahead is slowed down, the one behind sped up,
+    // so robot drives straight and both wheels reach their targets together
+    Pid syncPid{Kp_sync, Ki_sync, Kd_sync, maxSyncDuty, moveDt};
 
     int step = 0;
     float elapsed = 0.0f;
@@ -176,7 +157,6 @@ void MotorManager::driveToTargets(PowerMode powerMode)
 
     while (true)
     {
-        // Ramp up duty, wheels are checked during ramp too, so short moves do not overshoot
         if (step < rampSteps && xTaskGetTickCount() - lastRampTime >= rampStepDelay)
         {
             step++;
@@ -223,16 +203,9 @@ void MotorManager::driveToTargets(PowerMode powerMode)
         const float brakeDuty = std::max(minDriveDuty, Kp_position * remainingSum / static_cast<float>(movingCount));
         const float baseDuty = std::min(rampDuty, brakeDuty);
 
-        // Sync PID: wheel that is ahead is slowed down, the one behind sped up,
-        // so robot drives straight and both wheels reach their targets together
         const float leftProgress = std::abs(left.encoder.getDistanceInMeters(left.getEncoderTicks() - leftStart));
         const float rightProgress = std::abs(right.encoder.getDistanceInMeters(right.getEncoderTicks() - rightStart));
-        const float syncError = leftProgress - rightProgress;
-        syncIntegral = std::clamp(syncIntegral + syncError * moveDt, -maxSyncDuty / Ki_sync, maxSyncDuty / Ki_sync);
-        const float syncDerivative = (syncError - previousSyncError) / moveDt;
-        previousSyncError = syncError;
-        const float syncDuty = std::clamp(Kp_sync * syncError + Ki_sync * syncIntegral + Kd_sync * syncDerivative,
-                                          -maxSyncDuty, maxSyncDuty);
+        const float syncDuty = syncPid.update(leftProgress - rightProgress);
 
         if (!reached.at(leftMotor))
         {

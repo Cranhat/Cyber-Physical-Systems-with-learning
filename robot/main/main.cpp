@@ -17,10 +17,10 @@
 #include "Tests/Tests.hpp"
 #include <cmath>
 
-constexpr bool wifiEnabled = false;
+constexpr bool wifiEnabled = true;
 constexpr bool sensorTest = false;
 constexpr bool motorTest = false;
-constexpr bool drivingTest = true;
+constexpr bool drivingTest = false;
 constexpr bool rotationTest = false;
 
 extern "C"
@@ -37,7 +37,7 @@ void app_main()
     static Accelerometer accelerometer{i2c};
 
     static Lidar lidar{GPIO_NUM_43, GPIO_NUM_44, 230400};
-    static DataExchanger dataExchanger("10.52.46.13", 3000, "realme 9 Pro+", "c4i39885");
+    static DataExchanger dataExchanger("192.168.1.1", 3000, "", "");
     if (wifiEnabled)
     {
         dataExchanger.connectToWifi();
@@ -86,11 +86,6 @@ void app_main()
     if (rotationTest)
     {
         tests::rotation(motorManager);
-        return;
-    }
-    if (!wifiEnabled)
-    {
-        tests::driving(motorManager);
         return;
     }
 
