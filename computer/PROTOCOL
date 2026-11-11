@@ -1,49 +1,69 @@
-Binary sensor packet protocol:
+Robot <-> PC protocol
+================================================================
 
-[TYPE][PAYLOAD]
-
-TYPE     uint8_t
-
-where:
-  TYPE     - packet type identifier
-  PAYLOAD  - raw sensor data interpreted according to TYPE
-
-Current TYPEs:
-  TYPE           CODE
-
-  LIDAR          0x54
-  ACCEL          0x67
-  ENCODER        0x68
+Transport: TCP. The PC is the SERVER (port 3000), the ESP32 is the CLIENT
+The robot reconnects by itself when the connection drops.
 
 
+ROBOT -> PC
+----------------------------
+Every loop (~50 ms) the robot writes, without extra framing:
 
-LIDAR binary packet protocol:
+  0. RESPONSE packets (0x52), then a STATE packet (0x53) - only when there is something to send
+  1. raw LD06 lidar UART bytes  - whatever the UART had buffered; frames CAN be
+                                  split between loops
+  2. VELOCITY packet (0x56, 13 B)
+  3. ANGLE packet    (0x41, 13 B)   - always right after VELOCITY
 
-- Data Length: 1 byte (upper 3 bits reserved, lower 5 bits = number of points, fixed 12)
-- Radar speed: 2 bytes (deg/s)
-- Start angle: 2 bytes (0.01 degree)
-- DataPoints: 3 bytes each point (distanceValue: 2 bytes, confidence: 1 byte)
-- End angle: 2 bytes (0.01 degree)
-- Timestamp: 2 bytes (ms, wraps at 30000)
-- CRC8: 1 byte checksum
+The PC must scan the stream byte by byte and validate each candidate.
+VELOCITY is only accepted together with the ANGLE packet right after it (the PC reads the pair).
+0x52 / 0x53 are only accepted at a loop start: right after ANGLE, after another
+RESPONSE/STATE or as the first bytes of a connection (lidar bytes can contain the same values).
 
-ACCEL binary packet protocol:
+LIDAR frame (LD06), 47 B:
+  0x54                header
+  0x2C                VerLen (12 points)
+  uint16 speed        deg/s
+  uint16 startAngle   0.01 deg
+  12 x { uint16 distance [mm], uint8 confidence }
+  uint16 endAngle     0.01 deg
+  uint16 timestamp    ms, wraps at 30000
+  uint8  crc8         CRC8 (poly 0x4D) over the previous 46 bytes
 
-- Gyroscope X:   2 bytes
-- Gyroscope Y:   2 bytes
-- Gyroscope Z:   2 bytes
-- Acceleration X: 2 bytes
-- Acceleration Y: 2 bytes
-- Acceleration Z: 2 bytes
-- Timestamp delta: 8 bytes, little-endian uint64 nanoseconds
+VELOCITY packet, 13 B - Kalman estimate from robot/main/Kalman/MotionEstimator (50 Hz):
+  0x56
+  float  velocity               m/s along the direction of travel, starts from 0 each move
+  uint64 time                   us since the robot booted, time of the estimate
 
-TOTAL PAYLOAD SIZE: 20 bytes
-TOTAL PACKET SIZE:  21 bytes including TYPE
+ANGLE packet, 13 B:
+  0x41
+  float  heading                rad since boot, CLOCKWISE positive, kept across moves (not wrapped)
+  uint64 time                   us since the robot booted (read separately from VELOCITY's,
+                                can be one estimation step newer)
 
-ENCODER binary packet protocol:
+RESPONSE packet, 13 B - answer to one Request, when it is finished or rejected:
+  0x52
+  uint32 id                     id of the Request
+  uint32 status                 0 = succeeded, 1 = failed (rejected: queue full / FAILURE state /
+                                unknown type / powerMode below 100)
+  uint32 time                   ms the robot executed it
 
-- Encoder number: 1 byte
-- Meters:         4 bytes, little-endian IEEE-754 float
-- Timestamp delta: 8 bytes, little-endian uint64 nanoseconds
+STATE packet, 5 B - on every change and every 10 s:
+  0x53
+  uint32 state                  0 Idle, 1 Calibrating, 2 Ready, 3 Processing, 4 Failure
+  The RESPONSE of a finished request is always sent before the following state change.
 
-TOTAL PAYLOAD SIZE: 13 bytes
+
+PC -> ROBOT
+-----------------------------
+REQUEST packet, 18 B (packed):
+  0x51                  header; the robot skips bytes until it sees it
+  uint32 type           0 = move, 1 = rotate
+  float  distanceInM    used by move   (negative = backwards)
+  float  rotationAngle  used by rotate (degrees)
+  uint32 id             returned in the RESPONSE; the PC uses 1, 2, 3, ... (never 0)
+  uint8  powerMode      PWM duty x/255: 100 ultraSlow, 150 slow, 180 normal, 200 mediumFast,
+                        220 fast, 255 overdrive. Below 100 the robot answers failed.
+
+The robot queues up to 8 requests and executes them one at a time, sensor data keeps flowing.
+The PC (RobotLink) sends the next request only after the RESPONSE of the previous one.

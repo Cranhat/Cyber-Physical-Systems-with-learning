@@ -1,0 +1,6 @@
+<launch>
+  <arg name="config" default="$(find-pkg-share robot_bridge)/config/robot_bridge.yaml"/>
+  <node pkg="robot_bridge" exec="robot_bridge_node" name="robot_bridge" output="screen">
+    <param from="$(var config)"/>
+  </node>
+</launch>

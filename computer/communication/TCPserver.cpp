@@ -1,9 +1,7 @@
 #include "TCPserver.h"
 
-TCPserver::TCPserver(const char* PORT) : PORT(PORT), sfd(-1), cfd(-1)
+TCPserver::TCPserver(const char* PORT) : cfd(-1), sfd(-1), PORT(PORT)
 {
-    resetPacketDump();
-
 #ifdef _WIN32
     WSADATA wsa;
     if (WSAStartup(MAKEWORD(2,2), &wsa) != 0)
@@ -15,34 +13,69 @@ TCPserver::TCPserver(const char* PORT) : PORT(PORT), sfd(-1), cfd(-1)
 
 TCPserver::~TCPserver()
 {
+    closeSock();
+
 #ifdef _WIN32
-    closesocket(cfd);
-    closesocket(sfd);
-
     WSACleanup();
-#else
-    close(cfd);
-    close(sfd);
 #endif
-}
-
-bool TCPserver::AccelHandl()
-{
-    AccelData data(cfd, sfd, ACCEL_TYPE);
-
-    return data.get_output();
 }
 
 bool TCPserver::LidarHandl()
 {
     LidarData data(cfd, sfd, LIDAR_TYPE);
 
+    if (data.get_output() && data.is_valid() && onLidar)
+    {
+        onLidar(data.get_data());
+    }
+
     return data.get_output();
 }
 
-bool TCPserver::EncoderHandl()
+bool TCPserver::MotionHandl()
 {
-    EncoderData data(cfd, sfd, ENCODER_TYPE);
+    MotionData data(cfd);
+
+    if (data.get_output() && data.is_valid())
+    {
+        statusSlot = true;  // ANGLE is the last packet of a robot loop
+        if (onMotion)
+        {
+            onMotion(data.get_data());
+        }
+    }
+
+    return data.get_output();
+}
+
+bool TCPserver::ResponseHandl()
+{
+    ResponseData data(cfd);
+
+    if (data.get_output() && data.is_valid())
+    {
+        statusSlot = true;
+        if (onResponse)
+        {
+            onResponse(data.get_data());
+        }
+    }
+
+    return data.get_output();
+}
+
+bool TCPserver::StateHandl()
+{
+    StateData data(cfd);
+
+    if (data.get_output() && data.is_valid())
+    {
+        statusSlot = true;
+        if (onState)
+        {
+            onState(data.get_data());
+        }
+    }
 
     return data.get_output();
 }
@@ -84,8 +117,6 @@ bool TCPserver::connectSock()
         {
 #ifdef _WIN32
             closesocket(sfd);
-
-            WSACleanup();
 #else
             close(sfd);
 #endif
@@ -121,21 +152,97 @@ bool TCPserver::connectSock()
     socklen_t sin_size = sizeof cAddr;
 #endif
 
-    cfd = accept(sfd,(struct sockaddr *)&cAddr, &sin_size);
+    socket_t accepted = accept(sfd,(struct sockaddr *)&cAddr, &sin_size);
 
-    if (cfd == -1)
+    if (accepted == (socket_t)-1)
     {
         perror("accept");
         return false;
     }
 
-    printf("Accepted socket\n");
+    char ip[INET_ADDRSTRLEN] = {0};
+    inet_ntop(AF_INET, &cAddr.sin_addr, ip, sizeof(ip));
+
+    std::lock_guard<std::mutex> lock(sockMutex);
+    cfd = accepted;
+    peerAddr = std::string(ip) + ":" + std::to_string(ntohs(cAddr.sin_port));
+
+    printf("Accepted socket from %s\n", peerAddr.c_str());
 
     return true;
 }
 
+bool TCPserver::sendData(const uint8_t* data, size_t size)
+{
+    std::lock_guard<std::mutex> lock(sockMutex);
+
+    if (cfd == (socket_t)-1)
+    {
+        return false;
+    }
+
+    size_t sent = 0;
+
+    while (sent < size)
+    {
+#ifdef _WIN32
+        int ret = send(cfd, (const char*)data + sent, (int)(size - sent), 0);
+#else
+        int ret = (int)send(cfd, data + sent, size - sent, MSG_NOSIGNAL);
+#endif
+        if (ret <= 0)
+        {
+            return false;
+        }
+
+        sent += ret;
+    }
+
+    return true;
+}
+
+void TCPserver::closeSock()
+{
+    std::lock_guard<std::mutex> lock(sockMutex);
+
+#ifdef _WIN32
+    if (cfd != (socket_t)-1) closesocket(cfd);
+    if (sfd != (socket_t)-1) closesocket(sfd);
+#else
+    if (cfd != -1) close(cfd);
+    if (sfd != -1) close(sfd);
+#endif
+
+    cfd = (socket_t)-1;
+    sfd = (socket_t)-1;
+    peerAddr.clear();
+}
+
+void TCPserver::shutdownSock()
+{
+    std::lock_guard<std::mutex> lock(sockMutex);
+
+#ifdef _WIN32
+    // on Windows only closing wakes a blocked accept()/recv()
+    if (cfd != (socket_t)-1) { closesocket(cfd); cfd = (socket_t)-1; }
+    if (sfd != (socket_t)-1) { closesocket(sfd); sfd = (socket_t)-1; }
+#else
+    if (cfd != -1) shutdown(cfd, SHUT_RDWR);
+    if (sfd != -1) shutdown(sfd, SHUT_RDWR);
+#endif
+}
+
+std::string TCPserver::peer()
+{
+    std::lock_guard<std::mutex> lock(sockMutex);
+
+    return peerAddr;
+}
+
 bool TCPserver::receiveData()
 {
+    statusSlot = true;  // the first bytes of a connection are a robot loop start
+
     while (true)
     {
         uint8_t type;
@@ -143,38 +250,34 @@ bool TCPserver::receiveData()
 
 #ifdef _WIN32
         ret = recv(cfd, (char*)&type, sizeof(type), 0);
-
-        if (ret < 0)
-        {
-            printf("Lidar recv error: %d\n", WSAGetLastError());
-            closesocket(cfd);
-            closesocket(sfd);
-
-            WSACleanup();
 #else
         ret = recv(cfd, &type, sizeof(uint8_t), 0);
+#endif
 
         if (ret < 0)
         {
+#ifdef _WIN32
+            printf("type recv error: %d\n", WSAGetLastError());
+#else
             perror("type recv");
-            close(cfd);
-            close(sfd);
 #endif
-
             return false;
-
-        } else if (ret == 0){
-
+        }
+        else if (ret == 0)
+        {
             return false;
         }
 
         bool output;
+        const bool atLoopStart = statusSlot;
+        statusSlot = false;  // set again by a handler that takes a packet ending a loop / status block
 
         switch(type)
         {
+            case RESPONSE_TYPE: if (!atLoopStart) continue; output = ResponseHandl(); break;
+            case STATE_TYPE: if (!atLoopStart) continue; output = StateHandl(); break;
             case LIDAR_TYPE: output = LidarHandl(); break;
-            case ACCEL_TYPE: output = AccelHandl(); break;
-            case ENCODER_TYPE: output = EncoderHandl(); break;
+            case VELOCITY_TYPE: output = MotionHandl(); break;  // takes the ANGLE packet after it too
             default: continue;
         }
 

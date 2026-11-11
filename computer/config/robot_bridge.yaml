@@ -1,0 +1,13 @@
+robot_bridge:
+  ros__parameters:
+    port: 3000                       # TCP port the robot connects to (robot/main/main.cpp)
+    idle_timeout: 1.0                # [s] no data while idle -> UNRESPONSIVE
+    drop_after: 5.0                  # [s] UNRESPONSIVE this long -> close socket, wait for reconnect
+    max_queue: 32                    # command buffer size
+    max_move_time: 20.0              # [s] robot ends a move itself after this (robot/main/Config.hpp maxMoveTime)
+    max_rotation_time: 10.0          # [s] robot ends a rotation itself after this (maxRotationTime)
+    response_margin: 3.0             # [s] response timeout = max_move_time / max_rotation_time + this
+    power_mode: 150                  # default PWM duty x/255 of a command: 100 ultraSlow .. 150 slow .. 255 overdrive
+    odom_frame_id: odom
+    base_frame_id: base_link
+    lidar_frame_id: laser

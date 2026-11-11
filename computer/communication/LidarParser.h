@@ -6,31 +6,8 @@
 #include <cstdlib>
 #include <cstdint>
 #include <string>
-#include "PacketDump.h"
 
-#ifdef _WIN32
-    #define _WINSOCK_DEPRECATED_NO_WARNINGS
-
-    #include <winsock2.h>
-    #include <ws2tcpip.h>
-
-    #pragma comment(lib, "ws2_32.lib")
-
-    using socket_t = SOCKET;
-
-#else
-    #include <unistd.h>
-    #include <errno.h>
-
-    #include <netdb.h>
-    #include <sys/types.h>
-    #include <sys/socket.h>
-    #include <netinet/in.h>
-    #include <arpa/inet.h>
-
-    using socket_t = int;
-
-#endif
+#include "Socket.h"
 
 #define POINT_PER_PACK 12
 
@@ -59,6 +36,13 @@ class LidarData
     socket_t cfd, sfd;
     uint8_t packet_type;
     bool output;
+    bool valid{false};
+
+    static constexpr int LIDAR_PAYLOAD_SIZE = 1 + 2 + 2 + (POINT_PER_PACK * 3) + 2 + 2 + 1;
+
+    static uint16_t readU16(const uint8_t* buf, int offset);
+    // LD06 CRC8 (poly 0x4D) over header 0x54 + payload without the crc byte
+    static uint8_t lidarCrc8(const uint8_t* buf, int size);
  public:
     LidarData() = delete;
     LidarData(socket_t cfd, socket_t sfd, uint8_t packet_type);
@@ -66,4 +50,6 @@ class LidarData
     void printLidar();
     bool LidarRecv();
     bool get_output();
+    bool is_valid();
+    LiData get_data();
 };
