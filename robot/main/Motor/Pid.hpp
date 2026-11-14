@@ -17,7 +17,6 @@ public:
 
     float update(float error)
     {
-        // First sample has no previous error, derivative would jump
         const float derivative = first ? 0.0f : (error - previousError) / dt;
         first = false;
         previousError = error;
@@ -28,6 +27,13 @@ public:
         }
 
         return std::clamp(kp * error + ki * integral + kd * derivative, -maxOutput, maxOutput);
+    }
+
+    void reset()
+    {
+        integral = 0.0f;
+        previousError = 0.0f;
+        first = true;
     }
 
 private:

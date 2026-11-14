@@ -25,8 +25,10 @@ While driving straight:
 
 MotionEstimator is told which move is done (setMotion).
 Rotations use its heading and turn rate, control loop runs after every estimate:
-  - heading PID sets rotation duty, negative output turns back, so overshoot is corrected,
-  - duty limit ramps up at start, output smaller than minRotationDuty is raised to it,
+  - duty ramps up and goes down close to target like in straight moves (not below minRotationDuty),
+    so PowerMode sets rotation duty the same way,
+  - in the last degrees (settleZone) heading PID takes over, negative output turns back,
+    so overshoot is corrected, output smaller than minRotationDuty is raised to it,
   - wheels turn in opposite directions, forward/backward drift of the robot is pushed back,
   - rotation is finished when heading stays within tolerance and robot almost stopped turning.
 Target heading is kept across rotations, so error of one rotation and heading

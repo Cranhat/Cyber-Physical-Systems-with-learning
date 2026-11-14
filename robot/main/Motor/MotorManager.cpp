@@ -15,6 +15,29 @@ namespace
     {
         return static_cast<uint8_t>(std::clamp(duty, 0.0f, 255.0f));
     }
+    class Ramp
+    {
+    public:
+        explicit Ramp(PowerMode powerMode)
+            : maxDuty(static_cast<float>(powerMode)), lastStepTime(xTaskGetTickCount())
+        {
+        }
+
+        float duty()
+        {
+            if (step < rampSteps && xTaskGetTickCount() - lastStepTime >= rampStepDelay)
+            {
+                step++;
+                lastStepTime = xTaskGetTickCount();
+            }
+            return maxDuty * static_cast<float>(std::max(step, 1)) / static_cast<float>(rampSteps);
+        }
+
+    private:
+        const float maxDuty;
+        int step{0};
+        TickType_t lastStepTime;
+    };
 }
 
 MotorManager::MotorManager(MotionEstimator &motionEstimator)
@@ -85,7 +108,10 @@ bool MotorManager::rotateForAngle(float angleInDegrees, PowerMode powerMode)
     const int64_t leftStart = left.getEncoderTicks();
     const int64_t rightStart = right.getEncoderTicks();
 
+    // Used only inside settleZone, so its integral does not grow during the long saturated part
     Pid headingPid{Kp_rotation, Ki_rotation, Kd_rotation, maxDuty, controlDt};
+    bool settling = false;
+    Ramp ramp{powerMode};
     int settledSamples = 0;
     float elapsed = 0.0f;
     bool cancelled = false;
@@ -121,15 +147,31 @@ bool MotorManager::rotateForAngle(float angleInDegrees, PowerMode powerMode)
             break;
         }
 
-        const float pid = headingPid.update(error);
-
         // Rotation duty, positive turns clockwise. Inside tolerance motors are off, so robot settles.
-        // Duty limit ramps up at start, duty is never below minRotationDuty so motors still move
+        const float rampDuty = ramp.duty();
         float rotationDuty = 0.0f;
         if (std::abs(error) >= headingTolerance)
         {
-            const float dutyLimit = minRotationDuty + (maxDuty - minRotationDuty) * std::min(1.0f, elapsed / rotationRampTime);
-            rotationDuty = std::copysign(std::clamp(std::abs(pid), minRotationDuty, dutyLimit), pid);
+            if (std::abs(error) < settleZone)
+            {
+                // Last degrees: heading PID, negative output turns back so overshoot is corrected.
+                // Duty is never below minRotationDuty, so motors still move
+                if (!settling)
+                {
+                    headingPid.reset();
+                    settling = true;
+                }
+                const float pid = headingPid.update(error);
+                const float dutyLimit = std::max(minRotationDuty, rampDuty);
+                rotationDuty = std::copysign(std::clamp(std::abs(pid), minRotationDuty, dutyLimit), pid);
+            }
+            else
+            {
+                // Same as straight moves: ramp up, slow down close to target, not below minRotationDuty
+                settling = false;
+                const float brakeDuty = std::max(minRotationDuty, Kp_rotationBrake * std::abs(error));
+                rotationDuty = std::copysign(std::min(rampDuty, brakeDuty), error);
+            }
         }
 
         // Pure rotation keeps sum of signed wheel distances at 0
@@ -182,9 +224,8 @@ bool MotorManager::driveToTargets(PowerMode powerMode)
     // so robot drives straight and both wheels reach their targets together
     Pid syncPid{Kp_sync, Ki_sync, Kd_sync, maxSyncDuty, moveDt};
 
-    int step = 0;
+    Ramp ramp{powerMode};
     float elapsed = 0.0f;
-    TickType_t lastRampTime = xTaskGetTickCount();
     TickType_t lastWakeTime = xTaskGetTickCount();
     bool cancelled = false;
 
@@ -198,12 +239,7 @@ bool MotorManager::driveToTargets(PowerMode powerMode)
             break;
         }
 
-        if (step < rampSteps && xTaskGetTickCount() - lastRampTime >= rampStepDelay)
-        {
-            step++;
-            lastRampTime = xTaskGetTickCount();
-        }
-        const float rampDuty = static_cast<float>(static_cast<int>(powerMode) * std::max(step, 1) / rampSteps);
+        const float rampDuty = ramp.duty();
 
         // Wheel reached its target when it got to or past it in its direction
         bool allReached = true;

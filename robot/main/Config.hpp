@@ -25,7 +25,8 @@ namespace config
 
     // ---------- Straight moves (MotorManager::moveForDistance) ----------
 
-    // Soft start: duty ramps from 0 to PowerMode in rampSteps steps, one step every rampStepDelay
+    // Soft start of straight moves and rotations: duty ramps from 0 to PowerMode in rampSteps steps,
+    // one step every rampStepDelay
     constexpr int rampSteps = 20;
     constexpr TickType_t rampStepDelay = pdMS_TO_TICKS(50); // 20 * 50 ms = 1 s
 
@@ -56,16 +57,21 @@ namespace config
     // Smaller rotations are not worth starting motors for
     constexpr float minRotation = 0.5f * degToRad;
 
-    // Heading PID (duty per rad of heading error), output sign gives rotation direction,
-    // so overshoot is corrected by turning back. Output is limited to PowerMode
-    constexpr float Kp_rotation = 300.0f; // 30 deg error → ~157 duty
+    // Braking close to target heading: duty per rad of remaining heading (like Kp_position),
+    // at fast (220) braking starts ~42 deg before target. Duty ramps up like in straight moves
+    constexpr float Kp_rotationBrake = 300.0f;
+
+    // Motors do not move below minRotationDuty, braking and PID output never go below it
+    constexpr float minRotationDuty = 80.0f; // lowest duty at which robot still rotates, tune on the robot
+
+    // In the last degrees heading PID takes over from braking, so overshoot is corrected by turning back
+    constexpr float settleZone = 5.0f * degToRad;
+
+    // Heading PID (duty per rad of heading error), only inside settleZone. Output sign gives
+    // rotation direction. Output is limited to PowerMode
+    constexpr float Kp_rotation = 300.0f; // 5 deg error → ~26 duty
     constexpr float Ki_rotation = 200.0f; // pushes through friction in the last degrees
     constexpr float Kd_rotation = 30.0f;  // duty per rad/s of turn rate, brakes harder when approaching fast
-
-    // Rotation duty: limit ramps up from minRotationDuty to PowerMode in rotationRampTime.
-    // Motors do not move below minRotationDuty, so smaller PID output is raised to it
-    constexpr float minRotationDuty = 80.0f; // lowest duty at which robot still rotates, tune on the robot
-    constexpr float rotationRampTime = 0.5f; // seconds
 
     // Rotation is finished when heading stays within headingTolerance and turn rate below
     // settledTurnRate for settledSamplesNeeded loops in a row
