@@ -27,23 +27,26 @@ public:
     Robot(DataExchanger &dataExchanger, Accelerometer &accelerometer, Leds &leds, Lidar &lidar, MotorManager &motorManager);
     ~Robot();
 
-    DataExchanger &dataExchanger;
-    void moveForDistance(float distanceInMeters, PowerMode powerMode = slow);
-    void rotateForAngle(float angleInDegrees, PowerMode powerMode = slow);
+    // Return false when move was cancelled
+    bool moveForDistance(float distanceInMeters, PowerMode powerMode = slow);
+    bool rotateForAngle(float angleInDegrees, PowerMode powerMode = slow);
     void stopMotors();
-
+    // Stops current move, safe to call from other tasks
+    void cancelMove();
+    void clearCancel();
     // State is atomic
     void setState(State newState);
     State getState() const;
 
+    DataExchanger &dataExchanger;
+
 private:
+    void start();
+    void stop();
+
     Accelerometer &accelerometer;
     Leds &leds;
     Lidar &lidar;
     MotorManager &motorManager;
-
     std::atomic<State> state{Calibrating};
-
-    void start();
-    void stop();
 };

@@ -33,6 +33,14 @@ void RobotAPI::onRequest()
 {
     std::memcpy(&request, receiveBuffer, sizeof(request));
 
+    // Handled right away, queued it would wait for the move it should stop
+    if (request.type == cancel)
+    {
+        cancelRequests();
+        queueResponse(request.id, succeded, 0);
+        return;
+    }
+
     if (robot.getState() == Failure)
     {
         printf("Robot in failure, request %lu rejected\n", static_cast<unsigned long>(request.id));
@@ -58,7 +66,21 @@ void RobotAPI::processRequests()
     while (true)
     {
         Request currentRequest{};
-        xQueueReceive(requestQueue, &currentRequest, portMAX_DELAY);
+        // Only waits, request is taken under the mutex together with clearing the cancel flag
+        xQueuePeek(requestQueue, &currentRequest, portMAX_DELAY);
+        {
+            std::lock_guard<std::mutex> lock(cancelMutex);
+            if (xQueueReceive(requestQueue, &currentRequest, 0) != pdTRUE)
+            {
+                // Dropped by cancel in the meantime
+                if (uxQueueMessagesWaiting(requestQueue) == 0)
+                {
+                    robot.setState(Ready);
+                }
+                continue;
+            }
+            robot.clearCancel();
+        }
         robot.setState(Processing);
 
         const auto startTime = std::chrono::steady_clock::now();
@@ -85,18 +107,32 @@ bool RobotAPI::executeRequest(const Request &currentRequest)
     }
     const PowerMode powerMode = static_cast<PowerMode>(currentRequest.powerMode);
 
+    // Cancelled move returns false and is answered as failed
     switch (currentRequest.type)
     {
     case move:
-        robot.moveForDistance(currentRequest.distanceInM, powerMode);
-        return true;
+        return robot.moveForDistance(currentRequest.distanceInM, powerMode);
     case rotate:
-        robot.rotateForAngle(currentRequest.rotationAngle, powerMode);
-        return true;
+        return robot.rotateForAngle(currentRequest.rotationAngle, powerMode);
     default:
         printf("Unknown robot request type: %d\n", static_cast<int>(currentRequest.type));
         return false;
     }
+}
+
+void RobotAPI::cancelRequests()
+{
+    std::lock_guard<std::mutex> lock(cancelMutex);
+
+    Request dropped{};
+    while (xQueueReceive(requestQueue, &dropped, 0) == pdTRUE)
+    {
+        printf("Request %lu cancelled\n", static_cast<unsigned long>(dropped.id));
+        queueResponse(dropped.id, failed, 0);
+    }
+
+    // Current move stops at its next control step, processRequests answers it as failed
+    robot.cancelMove();
 }
 
 void RobotAPI::queueResponse(uint32_t id, ResponseStatus status, uint32_t timeInMs)

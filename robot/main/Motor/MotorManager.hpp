@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <map>
@@ -32,6 +33,11 @@ Target heading is kept across rotations, so error of one rotation and heading
 drift of straight moves are corrected in the next rotation.
 After rotation, wheel targets are set to where wheels stopped.
 
+cancel() can be called from another task, move stops at its next control step
+and returns false. Wheel targets and target heading are then set to where robot
+stopped, so next move starts from there and does not finish the cancelled one.
+Flag stays set until clearCancel(), so it is cleared before every new move.
+
 Both encoders must count up when robot drives forward.
 */
 class MotorManager
@@ -46,17 +52,24 @@ public:
 
     void addMotor(const int motorNumber, Motor &motor);
 
-    void moveForDistance(float distanceInMeters, PowerMode powerMode);
-    void rotateForAngle(float angleInDegrees, PowerMode powerMode);
+    // Return false when move was cancelled
+    bool moveForDistance(float distanceInMeters, PowerMode powerMode);
+    bool rotateForAngle(float angleInDegrees, PowerMode powerMode);
 
     void stop();
+
+    // Safe to call from other tasks
+    void cancel();
+    void clearCancel();
 
 private:
     MotionEstimator &motionEstimator;
     std::map<int, Motor> motors;
     std::map<int, int64_t> targetTicks; 
     float targetHeading{0.0f}; // heading robot should have, since boot (rad, clockwise positive)
+    std::atomic<bool> cancelRequested{false};
 
     int64_t distanceToTicks(int motorNumber, float distanceInMeters);
-    void driveToTargets(PowerMode powerMode);
+    bool driveToTargets(PowerMode powerMode);
+    void setTargetsToCurrentPosition();
 };

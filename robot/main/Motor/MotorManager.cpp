@@ -36,26 +36,45 @@ void MotorManager::stop()
     }
 }
 
+void MotorManager::cancel()
+{
+    cancelRequested.store(true);
+}
+
+void MotorManager::clearCancel()
+{
+    cancelRequested.store(false);
+}
+
+void MotorManager::setTargetsToCurrentPosition()
+{
+    for (auto &[motorNumber, motor] : motors)
+    {
+        targetTicks[motorNumber] = motor.getEncoderTicks();
+    }
+    targetHeading = motionEstimator.getHeading();
+}
+
 int64_t MotorManager::distanceToTicks(int motorNumber, float distanceInMeters)
 {
     const Encoder &encoder = motors.at(motorNumber).encoder;
     return std::lround(distanceInMeters / encoder.getCorrectedDistanceInMeters(1));
 }
 
-void MotorManager::moveForDistance(float distanceInMeters, PowerMode powerMode)
+bool MotorManager::moveForDistance(float distanceInMeters, PowerMode powerMode)
 {
     targetTicks[leftMotor] += distanceToTicks(leftMotor, distanceInMeters);
     targetTicks[rightMotor] += distanceToTicks(rightMotor, distanceInMeters);
-    driveToTargets(powerMode);
+    return driveToTargets(powerMode);
 }
 
-void MotorManager::rotateForAngle(float angleInDegrees, PowerMode powerMode)
+bool MotorManager::rotateForAngle(float angleInDegrees, PowerMode powerMode)
 {
     // Positive angle turns clockwise: left wheel forward, right wheel backward.
     targetHeading += angleInDegrees * degToRad;
     if (std::abs(targetHeading - motionEstimator.getHeading()) < minRotation)
     {
-        return;
+        return true;
     }
 
     motionEstimator.setMotion(Motion::rotating);
@@ -69,9 +88,17 @@ void MotorManager::rotateForAngle(float angleInDegrees, PowerMode powerMode)
     Pid headingPid{Kp_rotation, Ki_rotation, Kd_rotation, maxDuty, controlDt};
     int settledSamples = 0;
     float elapsed = 0.0f;
+    bool cancelled = false;
 
     while (true)
     {
+        if (cancelRequested.load())
+        {
+            printf("Rotation cancelled\n");
+            cancelled = true;
+            break;
+        }
+
         motionEstimator.waitForEstimate();
         const float turnRate = motionEstimator.getTurnRate();
         const float error = targetHeading - motionEstimator.getHeading();
@@ -124,12 +151,17 @@ void MotorManager::rotateForAngle(float angleInDegrees, PowerMode powerMode)
 
     vTaskDelay(pdMS_TO_TICKS(200)); // wait until stationary
     motionEstimator.setMotion(Motion::still);
+    if (cancelled)
+    {
+        setTargetsToCurrentPosition();
+        return false;
+    }
     targetTicks[leftMotor] = left.getEncoderTicks();
     targetTicks[rightMotor] = right.getEncoderTicks();
-
+    return true;
 }
 
-void MotorManager::driveToTargets(PowerMode powerMode)
+bool MotorManager::driveToTargets(PowerMode powerMode)
 {
     Motor &left = motors.at(leftMotor);
     Motor &right = motors.at(rightMotor);
@@ -154,9 +186,18 @@ void MotorManager::driveToTargets(PowerMode powerMode)
     float elapsed = 0.0f;
     TickType_t lastRampTime = xTaskGetTickCount();
     TickType_t lastWakeTime = xTaskGetTickCount();
+    bool cancelled = false;
 
     while (true)
     {
+        if (cancelRequested.load())
+        {
+            printf("Move cancelled\n");
+            stop();
+            cancelled = true;
+            break;
+        }
+
         if (step < rampSteps && xTaskGetTickCount() - lastRampTime >= rampStepDelay)
         {
             step++;
@@ -222,4 +263,9 @@ void MotorManager::driveToTargets(PowerMode powerMode)
 
     vTaskDelay(pdMS_TO_TICKS(200)); // wait until stationary
     motionEstimator.setMotion(Motion::still);
+    if (cancelled)
+    {
+        setTargetsToCurrentPosition();
+    }
+    return !cancelled;
 }

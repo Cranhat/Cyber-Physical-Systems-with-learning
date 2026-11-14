@@ -23,19 +23,29 @@ void Robot::stop() {
 
 };
 
-void Robot::moveForDistance(float distanceInMeters, PowerMode powerMode)
+bool Robot::moveForDistance(float distanceInMeters, PowerMode powerMode)
 {
-    motorManager.moveForDistance(distanceInMeters, powerMode);
+    return motorManager.moveForDistance(distanceInMeters, powerMode);
 }
 
-void Robot::rotateForAngle(float angleInDegrees, PowerMode powerMode)
+bool Robot::rotateForAngle(float angleInDegrees, PowerMode powerMode)
 {
-    motorManager.rotateForAngle(angleInDegrees, powerMode);
+    return motorManager.rotateForAngle(angleInDegrees, powerMode);
 }
 
 void Robot::stopMotors()
 {
     motorManager.stop();
+}
+
+void Robot::cancelMove()
+{
+    motorManager.cancel();
+}
+
+void Robot::clearCancel()
+{
+    motorManager.clearCancel();
 }
 
 void Robot::setState(State newState)

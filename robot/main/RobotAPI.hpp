@@ -4,12 +4,14 @@
 #include "freertos/queue.h"
 #include <chrono>
 #include <cstdint>
+#include <mutex>
 
 
 enum RequestType : uint32_t
 {
     move,
-    rotate
+    rotate,
+    cancel // stops current move and drops queued ones, other fields are ignored
 };
 static_assert(sizeof(RequestType) == 4);
 
@@ -56,6 +58,11 @@ does not stop during a move. State is Processing until the queue is empty.
 Request is answered as failed when the queue is full or robot is in Failure,
 when its type is unknown or its power mode is lower than ultraSlow.
 
+Cancel request is not queued, it is handled as soon as it arrives (also in Failure):
+all queued requests are dropped and answered as failed, current move stops at
+its next control step and is answered as failed, then cancel is answered as succeded.
+Robot stays where it stopped, next move starts from there.
+
 Received from computer:
   REQUEST  0x51 – Request (18 bytes including header)
 Sent to computer (packets [TYPE][PAYLOAD], little-endian):
@@ -77,7 +84,8 @@ public:
 
 private:
     static constexpr int maxQueuedRequests = 8;
-    static constexpr int maxPendingResponses = maxQueuedRequests;
+    // Queued requests + current move + cancel, all answered at once on cancel
+    static constexpr int maxPendingResponses = maxQueuedRequests + 2;
     static constexpr int responsePacketSize = 1 + sizeof(Response);
     static constexpr int statePacketSize = sizeof(StateFrame);
 
@@ -90,6 +98,10 @@ private:
     QueueHandle_t requestQueue;
     QueueHandle_t responseQueue;
 
+    // Taking next request with clearing cancel flag and cancel itself are done
+    // under it, so cancel is never lost and never stops a request sent after it
+    std::mutex cancelMutex;
+
     bool stateSent{false};
     State lastSentState{Calibrating};
     std::chrono::steady_clock::time_point lastStateSendTime{};
@@ -97,5 +109,6 @@ private:
     static void requestTask(void *arg);
     void processRequests();
     bool executeRequest(const Request &currentRequest);
+    void cancelRequests();
     void queueResponse(uint32_t id, ResponseStatus status, uint32_t timeInMs);
 };
