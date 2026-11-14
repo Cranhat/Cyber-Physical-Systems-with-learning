@@ -80,7 +80,6 @@ namespace tests
     inline void rotation(MotorManager &motorManager)
     {
         printf("\n---rotation test---\n");
-        motorManager.logRotation = true;
         printf("--- 45 deg clockwise ---\n");
         motorManager.rotateForAngle(45, normal);
         vTaskDelay(2000 / portTICK_PERIOD_MS);

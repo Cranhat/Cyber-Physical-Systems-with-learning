@@ -12,7 +12,6 @@ namespace
     constexpr uint8_t statePacketType = 0x53;
     constexpr auto stateSendInterval = std::chrono::seconds(10);
 
-    // Higher than DataExchanger task, so motor control loop keeps its timing
     constexpr UBaseType_t requestTaskPriority = 6;
     constexpr uint32_t requestTaskStackSize = 4096;
 }
@@ -40,8 +39,6 @@ void RobotAPI::onRequest()
         queueResponse(request.id, failed, 0);
         return;
     }
-
-    // Requests wait in queue and are executed one at a time
     if (xQueueSend(requestQueue, &request, 0) != pdTRUE)
     {
         printf("Request queue full, request %lu rejected\n", static_cast<unsigned long>(request.id));
@@ -115,8 +112,6 @@ int RobotAPI::sendStatus()
 {
     int length = 0;
 
-    // State is read before responses: response of a finished move is queued
-    // before state changes, so it is always sent before the state update
     const State state = robot.getState();
 
     Response response{};
@@ -131,9 +126,8 @@ int RobotAPI::sendStatus()
     const auto now = std::chrono::steady_clock::now();
     if (!stateSent || state != lastSentState || now - lastStateSendTime >= stateSendInterval)
     {
-        const uint32_t stateValue = state;
-        sendBuffer[length] = statePacketType;
-        std::memcpy(sendBuffer + length + 1, &stateValue, sizeof(stateValue));
+        const StateFrame frame{statePacketType, state};
+        std::memcpy(sendBuffer + length, &frame, sizeof(frame));
         length += statePacketSize;
 
         stateSent = true;

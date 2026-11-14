@@ -1,5 +1,6 @@
 #include "MotionEstimator.hpp"
 
+#include "freertos/FreeRTOS.h"
 #include "Config.hpp"
 #include "freertos/task.h"
 #include "esp_timer.h"
@@ -11,9 +12,8 @@ namespace
 {
     int writeFrame(uint8_t *frame, uint8_t type, float value, int64_t timeUs)
     {
-        frame[0] = type;
-        std::memcpy(frame + 1, &value, sizeof(value));
-        std::memcpy(frame + 5, &timeUs, sizeof(timeUs));
+        const KalmanFrame kalmanFrame{type, value, timeUs};
+        std::memcpy(frame, &kalmanFrame, sizeof(kalmanFrame));
         return MotionEstimator::frameSize;
     }
 }

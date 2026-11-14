@@ -16,6 +16,7 @@ enum State : uint32_t
     Processing,
     Failure
 };
+static_assert(sizeof(State) == 4);
 
 /*
 Class of robot itself.
@@ -31,7 +32,7 @@ public:
     void rotateForAngle(float angleInDegrees, PowerMode powerMode = slow);
     void stopMotors();
 
-    // State can be changed and read from different tasks
+    // State is atomic
     void setState(State newState);
     State getState() const;
 

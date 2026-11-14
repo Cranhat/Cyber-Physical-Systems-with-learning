@@ -1,3 +1,5 @@
+#pragma once
+
 #include <cstdint>
 
 #define POINT_PER_PACK 12

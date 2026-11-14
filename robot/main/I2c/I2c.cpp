@@ -18,8 +18,6 @@ void I2c::setUpMaster()
         .clk_source = I2C_CLK_SRC_DEFAULT,
         .glitch_ignore_cnt = 5,
         .intr_priority = 0,
-        // 0 = synchronous mode: transfers finish before functions return.
-        // Asynchronous mode (> 0) returned before data was read and used buffers after they went out of scope
         .trans_queue_depth = 0,
         .flags = {
             .enable_internal_pullup = true,

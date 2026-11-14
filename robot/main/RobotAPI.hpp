@@ -1,25 +1,25 @@
 #pragma once
 
 #include "Robot/Robot.hpp"
-#include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
-#include <atomic>
 #include <chrono>
 #include <cstdint>
+
 
 enum RequestType : uint32_t
 {
     move,
     rotate
 };
+static_assert(sizeof(RequestType) == 4);
 
 enum ResponseStatus : uint32_t
 {
     succeded,
     failed
 };
+static_assert(sizeof(ResponseStatus) == 4);
 
-// Packed, so it has no padding and is the same 18 bytes as sent by computer
 struct __attribute__((packed)) Request
 {
     uint8_t header;      // 1 byte, always 0x51
@@ -27,16 +27,24 @@ struct __attribute__((packed)) Request
     float distanceInM;   // 4 bytes
     float rotationAngle; // 4 bytes
     uint32_t id;         // 4 bytes
-    uint8_t powerMode;   // 1 byte, PowerMode (duty x/255), at least ultraSlow
+    uint8_t powerMode;   // 1 byte
 };
 static_assert(sizeof(Request) == 18);
 
-struct Response
+struct __attribute__((packed)) Response
 {
     uint32_t id;  // 4 bytes
     ResponseStatus status; // 4 bytes
-    uint32_t time; // 4 bytes, duration of the action in ms
+    uint32_t time; // 4 bytes, ms
 };
+static_assert(sizeof(Response) == 12);
+
+struct __attribute__((packed)) StateFrame
+{
+    uint8_t type; // 1 byte, always 0x53
+    State state;  // 4 bytes
+};
+static_assert(sizeof(StateFrame) == 5);
 
 /*
 Class used to provide driving interface via computer connection.
@@ -71,7 +79,7 @@ private:
     static constexpr int maxQueuedRequests = 8;
     static constexpr int maxPendingResponses = maxQueuedRequests;
     static constexpr int responsePacketSize = 1 + sizeof(Response);
-    static constexpr int statePacketSize = 1 + sizeof(uint32_t);
+    static constexpr int statePacketSize = sizeof(StateFrame);
 
     Robot &robot;
     DataExchanger &dataExchanger;

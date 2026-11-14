@@ -16,6 +16,15 @@ enum class Motion
     rotating
 };
 
+// Frame with one Kalman estimate sent to computer ()
+struct __attribute__((packed)) KalmanFrame
+{
+    uint8_t type;   // 1 byte, velocity 0x56 or angle 0x41
+    float value;    // 4 bytes, velocity (m/s) or heading (rad)
+    int64_t timeUs; // 8 bytes, time of the estimate (µs)
+};
+static_assert(sizeof(KalmanFrame) == 13);
+
 /*
 Estimates robot motion with two independent Kalman filters. Own task (50 Hz)
 reads IMU and encoders and updates both filters.
@@ -61,7 +70,7 @@ public:
     int sendVelocity();
     int sendAngle();
 
-    static constexpr int frameSize = 1 + 4 + 8;
+    static constexpr int frameSize = sizeof(KalmanFrame);
     uint8_t velocityData[frameSize];
     uint8_t angleData[frameSize];
 

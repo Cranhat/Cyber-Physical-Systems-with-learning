@@ -14,8 +14,10 @@ public:
     ~I2c();
 
     std::shared_ptr<I2cSlave> createSlave(uint8_t reg);
-    // Both return false when transfer failed
+
+    // returns false when failed
     bool transmit(std::shared_ptr<I2cSlave> slave, uint8_t reg, uint8_t *cmd, uint8_t writeSize);
+    // returns false when failed
     bool transmitReceive(std::shared_ptr<I2cSlave> slave, uint8_t reg, uint8_t *buffer, uint8_t writeSize);
 
 private:
